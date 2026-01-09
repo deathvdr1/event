@@ -35,6 +35,12 @@
 </head>
 <body class="max-w-4xl mx-auto">
 
+    <!-- CONNECTION STATUS BAR -->
+    <div id="connection-status" class="bg-blue-900 text-white text-xs p-2 mb-4 rounded border border-blue-500 flex justify-between">
+        <span>Connecting to database...</span>
+        <span id="app-id-display">ID: ...</span>
+    </div>
+
     <div class="flex justify-between items-center mb-8">
         <h1 class="text-2xl text-yellow-300">Admin Control</h1>
         <a href="index.html" class="retro-btn bg-blue-600 text-white text-xs px-4 py-2 border border-black rounded">Back to Game</a>
@@ -103,6 +109,7 @@
             orderBy, query, onSnapshot, serverTimestamp, writeBatch 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // CONFIGURATION
         const firebaseConfig = {
             apiKey: "AIzaSyBu05x09GesEm9zSwrnzQbN2SV03q3xF-0",
             authDomain: "re-fight.firebaseapp.com",
@@ -113,14 +120,21 @@
             measurementId: "G-RC3WBTFK5J"
         };
 
-        const appId = 'default-app-id';
+        // CRITICAL FIX: Dynamically determine App ID to match script.js
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
+        // UPDATE STATUS UI
+        const statusDiv = document.getElementById('connection-status');
+        const appIdDisplay = document.getElementById('app-id-display');
+        appIdDisplay.textContent = `App ID: ${appId}`;
+
+        // INIT FIREBASE
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
         
         // DOM Elements
-        const statusEl = document.getElementById('current-status');
+        const currentStatusEl = document.getElementById('current-status');
         const countEl = document.getElementById('participant-count');
         const participantListEl = document.getElementById('participant-list');
         const userListEl = document.getElementById('user-list');
@@ -131,32 +145,43 @@
         const refreshUsersBtn = document.getElementById('refresh-users-btn');
 
         async function init() {
-            await signInAnonymously(auth);
-            
-            // Listeners
-            listenToStatus();
-            listenToParticipants();
-            fetchUsers();
-            
-            // Event Buttons
-            closeBtn.addEventListener('click', () => setEventStatus('locked'));
-            openBtn.addEventListener('click', () => setEventStatus('open'));
-            startBtn.addEventListener('click', startEvent);
-            refreshUsersBtn.addEventListener('click', fetchUsers);
+            try {
+                await signInAnonymously(auth);
+                statusDiv.firstElementChild.textContent = "✅ Connected to Database";
+                statusDiv.classList.remove('bg-blue-900', 'border-blue-500');
+                statusDiv.classList.add('bg-green-900', 'border-green-500');
+                
+                // Listeners
+                listenToStatus();
+                listenToParticipants();
+                fetchUsers();
+                
+                // Event Buttons
+                closeBtn.addEventListener('click', () => setEventStatus('locked'));
+                openBtn.addEventListener('click', () => setEventStatus('open'));
+                startBtn.addEventListener('click', startEvent);
+                refreshUsersBtn.addEventListener('click', fetchUsers);
+            } catch (e) {
+                console.error("Auth failed", e);
+                statusDiv.firstElementChild.textContent = "❌ Connection Failed";
+                statusDiv.classList.remove('bg-blue-900', 'border-blue-500');
+                statusDiv.classList.add('bg-red-900', 'border-red-500');
+            }
         }
 
         // --- EVENT MANAGER LOGIC ---
 
         function listenToStatus() {
+            // Path must match script.js exactly
             onSnapshot(doc(db, `artifacts/${appId}/public/data/event_data/status`), (doc) => {
                 const data = doc.data();
                 const state = data ? data.state : 'locked';
-                statusEl.textContent = state.toUpperCase();
+                currentStatusEl.textContent = state.toUpperCase();
                 
                 // Visual feedback
-                if(state === 'locked') statusEl.className = 'text-red-500';
-                else if(state === 'open') statusEl.className = 'text-green-500';
-                else if(state === 'started') statusEl.className = 'text-purple-500';
+                if(state === 'locked') currentStatusEl.className = 'text-red-500 font-bold';
+                else if(state === 'open') currentStatusEl.className = 'text-green-500 font-bold';
+                else if(state === 'started') currentStatusEl.className = 'text-purple-500 font-bold';
             });
         }
 
@@ -187,10 +212,10 @@
             const docRef = doc(db, `artifacts/${appId}/public/data/event_data/status`);
             try {
                 await setDoc(docRef, { state: status });
-                alert(`Event status set to: ${status}`);
+                // No alert needed, UI updates automatically via listener
             } catch (e) {
                 console.error(e);
-                alert("Error setting status");
+                alert("Error setting status: " + e.message);
             }
         }
 
@@ -204,7 +229,7 @@
             snapshot.forEach(doc => participants.push(doc.data()));
 
             if (participants.length < 2) {
-                alert("Not enough players to start!");
+                alert("Not enough players to start! Need at least 2.");
                 return;
             }
 
@@ -297,7 +322,7 @@
 
             } catch (error) {
                 console.error(error);
-                userListEl.innerHTML = `<tr><td colspan="3" class="text-red-400 p-4">Error loading users.</td></tr>`;
+                userListEl.innerHTML = `<tr><td colspan="3" class="text-red-400 p-4">Error loading users: ${error.message}</td></tr>`;
             }
         }
 
