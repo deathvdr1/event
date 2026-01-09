@@ -67,7 +67,7 @@
             </button>
         </div>
 
-        <!-- NEW: Auto-Match Toggle -->
+        <!-- Auto-Match Toggle -->
         <div class="mb-4 bg-gray-900 p-4 rounded border border-purple-500">
             <h3 class="text-white mb-2">Automated Tournament</h3>
             <div class="flex items-center gap-4">
@@ -139,7 +139,7 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, collection, getDocs, deleteDoc, doc, setDoc, 
-            orderBy, query, onSnapshot, serverTimestamp, writeBatch, where 
+            orderBy, query, onSnapshot, serverTimestamp, writeBatch, where, limit 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // CONFIGURATION
@@ -243,21 +243,16 @@
 
         async function performAutoMatch() {
             console.log("Auto-matching scan...");
+            // Corrected Path: event_participants
             const participantsRef = collection(db, `artifacts/${appId}/public/data/event_participants`);
-            const q = query(participantsRef, where('status', '==', 'waiting'));
+            const q = query(participantsRef, where('status', '==', 'waiting'), limit(2)); // Limit to 2 to prevent race conditions
             const snapshot = await getDocs(q);
             
-            if (snapshot.size < 2) {
-                // Check if winner
-                // Logic: If size is 1, and total participants is 1 (others eliminated), declare winner?
-                // For now, let's keep it simple: match whoever is waiting.
-                return;
-            }
+            if (snapshot.size < 2) return;
 
             const waitingPlayers = [];
             snapshot.forEach(doc => waitingPlayers.push(doc.data()));
 
-            // Pair up first 2 found
             if (waitingPlayers.length >= 2) {
                 const p1 = waitingPlayers[0];
                 const p2 = waitingPlayers[1];
@@ -291,10 +286,6 @@
                 await batch.commit();
             }
         }
-
-        // Check for overall winner (Basic logic: if only 1 waiting and 0 battling)
-        // This is complex to do robustly without a server, so we'll rely on matches for now.
-        // A manual "Declare Winner" button could be added for the admin if needed.
 
         function listenToStatus() {
             onSnapshot(doc(db, `artifacts/${appId}/public/data/event_config/status`), (doc) => {
@@ -334,40 +325,35 @@
                     participantListEl.appendChild(div);
                 });
                 
-                // Winner Detection Logic (Runs only if Auto-Match is ON)
-                if (autoMatchEnabled && snapshot.size > 0) {
-                    const waiting = [];
-                    const battling = [];
-                    snapshot.forEach(doc => {
-                        const p = doc.data();
-                        if (p.status === 'waiting') waiting.push(p);
-                        if (p.status === 'battling') battling.push(p);
-                    });
-                    
-                    // If 1 waiting and 0 battling => WINNER
-                    if (waiting.length === 1 && battling.length === 0 && snapshot.size > 1) { // Size > 1 implies others were eliminated/deleted? 
-                        // Actually, deleted players are gone. So if size == 1, they are the winner.
-                    }
-                    if (snapshot.size === 1) {
-                         const winner = snapshot.docs[0].data();
-                         // Check if not already recorded?
-                         // For now, visual only in the list.
-                         participantListEl.innerHTML += `<div class="text-center text-yellow-300 font-bold mt-2">🏆 WINNER: ${winner.username} 🏆</div>`;
-                         // Save to winners list
+                // Simple Winner Detection (Visual Only)
+                if (autoMatchEnabled && snapshot.size === 1) {
+                     const winner = snapshot.docs[0].data();
+                     // Only check if they are "waiting" (won last match)
+                     if (winner.status === 'waiting') {
+                         participantListEl.innerHTML += `<div class="text-center text-yellow-300 font-bold mt-2">🏆 POTENTIAL WINNER: ${winner.username} 🏆</div>`;
                          saveWinner(winner.username);
-                    }
+                     }
                 }
             });
         }
         
         async function saveWinner(username) {
-            // Check if already saved recently to avoid spam
-            // Simple check: do nothing for now, manual refresh.
-            // Or better: write to event_winners collection
              const winnersRef = collection(db, `artifacts/${appId}/public/data/event_winners`);
-             // We need a unique ID for the win event, or just push.
-             // But we need to prevent infinite loop of saves.
-             // Skip for this iteration to be safe, rely on visual cue.
+             // Avoid duplicates by using username as ID for daily tracking, or random ID
+             // Simple: add with timestamp
+             // To avoid spamming, we check if this user won in the last minute.
+             const q = query(winnersRef, where("username", "==", username), orderBy("wonAt", "desc"), limit(1));
+             const snaps = await getDocs(q);
+             if (!snaps.empty) {
+                 const lastWin = snaps.docs[0].data().wonAt;
+                 if (Date.now() - lastWin.toMillis() < 60000) return; // Prevent spamming within 1 min
+             }
+
+             await setDoc(doc(winnersRef), {
+                 username: username,
+                 wonAt: serverTimestamp()
+             });
+             fetchWinners();
         }
 
         async function setEventStatus(status) {
@@ -402,6 +388,7 @@
             const batch = writeBatch(db);
             const gamesCollection = collection(db, `artifacts/${appId}/public/data/games`);
             
+            // Initial Pairing
             for (let i = 0; i < participants.length - 1; i += 2) {
                 const p1 = participants[i];
                 const p2 = participants[i+1];
@@ -423,7 +410,6 @@
                 batch.set(doc(db, `artifacts/${appId}/public/data/event_matches/${p1.userId}`), { gameId: gameId, opponent: p2.username });
                 batch.set(doc(db, `artifacts/${appId}/public/data/event_matches/${p2.userId}`), { gameId: gameId, opponent: p1.username });
                 
-                // Set status to battling
                 batch.update(doc(db, `artifacts/${appId}/public/data/event_participants/${p1.userId}`), { status: 'battling' });
                 batch.update(doc(db, `artifacts/${appId}/public/data/event_participants/${p2.userId}`), { status: 'battling' });
             }
@@ -442,10 +428,31 @@
 
         async function fetchWinners() {
             winnerListEl.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400">Loading...</td></tr>';
-            // Placeholder logic: We aren't saving winners to DB yet in the auto-loop to prevent infinite writes.
-            // But we can show them if manually saved or implement logic later.
-            // For now, let's just clear.
-             winnerListEl.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400">Winner tracking enabled in auto-mode console.</td></tr>';
+            try {
+                const winnersRef = collection(db, `artifacts/${appId}/public/data/event_winners`);
+                const q = query(winnersRef, orderBy('wonAt', 'desc'), limit(10));
+                const snapshot = await getDocs(q);
+                
+                if (snapshot.empty) {
+                    winnerListEl.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400">No winners yet.</td></tr>';
+                    return;
+                }
+                
+                winnerListEl.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.wonAt ? new Date(data.wonAt.seconds * 1000).toLocaleTimeString() : '?';
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-700';
+                    tr.innerHTML = `
+                        <td class="p-3 text-yellow-300 font-bold">🏆 ${data.username}</td>
+                        <td class="p-3 text-gray-400 text-xs">${date}</td>
+                    `;
+                    winnerListEl.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         async function fetchUsers() {
