@@ -103,7 +103,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // Updated import to include signInWithCustomToken
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, collection, getDocs, deleteDoc, doc, setDoc, 
@@ -121,7 +120,6 @@
             measurementId: "G-RC3WBTFK5J"
         };
 
-        // CRITICAL FIX: Dynamically determine App ID to match script.js
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         // UPDATE STATUS UI
@@ -130,7 +128,6 @@
         appIdDisplay.textContent = `App ID: ${appId}`;
 
         // INIT FIREBASE
-        // Use provided config if available, otherwise use the static one
         const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
         const app = initializeApp(config);
         const db = getFirestore(app);
@@ -149,7 +146,6 @@
 
         async function init() {
             try {
-                // Improved Authentication Logic
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -181,13 +177,12 @@
         // --- EVENT MANAGER LOGIC ---
 
         function listenToStatus() {
-            // Path must match script.js exactly
-            onSnapshot(doc(db, `artifacts/${appId}/public/data/event_data/status`), (doc) => {
+            // FIX: Using 'event_config' collection to hold the status document
+            onSnapshot(doc(db, `artifacts/${appId}/public/data/event_config/status`), (doc) => {
                 const data = doc.data();
                 const state = data ? data.state : 'locked';
                 currentStatusEl.textContent = state.toUpperCase();
                 
-                // Visual feedback
                 if(state === 'locked') currentStatusEl.className = 'text-red-500 font-bold';
                 else if(state === 'open') currentStatusEl.className = 'text-green-500 font-bold';
                 else if(state === 'started') currentStatusEl.className = 'text-purple-500 font-bold';
@@ -195,7 +190,8 @@
         }
 
         function listenToParticipants() {
-            const q = query(collection(db, `artifacts/${appId}/public/data/event_data/participants`), orderBy('joinedAt'));
+            // FIX: Flattened path to 'event_participants'
+            const q = query(collection(db, `artifacts/${appId}/public/data/event_participants`), orderBy('joinedAt'));
             onSnapshot(q, (snapshot) => {
                 countEl.textContent = snapshot.size;
                 participantListEl.innerHTML = '';
@@ -218,10 +214,10 @@
         }
 
         async function setEventStatus(status) {
-            const docRef = doc(db, `artifacts/${appId}/public/data/event_data/status`);
+            // FIX: Using 'event_config' collection
+            const docRef = doc(db, `artifacts/${appId}/public/data/event_config/status`);
             try {
                 await setDoc(docRef, { state: status });
-                // No alert needed, UI updates automatically via listener
             } catch (e) {
                 console.error(e);
                 alert("Error setting status: " + e.message);
@@ -231,8 +227,8 @@
         async function startEvent() {
             if (!confirm("Start Event? This will pair current players into matches.")) return;
             
-            // 1. Get Participants
-            const participantsRef = collection(db, `artifacts/${appId}/public/data/event_data/participants`);
+            // 1. Get Participants from flattened path
+            const participantsRef = collection(db, `artifacts/${appId}/public/data/event_participants`);
             const snapshot = await getDocs(participantsRef);
             let participants = [];
             snapshot.forEach(doc => participants.push(doc.data()));
@@ -263,7 +259,7 @@
                 const gameData = {
                     player1: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p1.username },
                     player2: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p2.username },
-                    gameState: 'selection', // Start directly in selection since both are 'joined'
+                    gameState: 'selection',
                     log: [`Event Match! ${p1.username} vs ${p2.username}`],
                     createdAt: serverTimestamp(),
                     isEvent: true
@@ -271,16 +267,16 @@
                 
                 batch.set(newGameDoc, gameData);
                 
-                // Assign Matches to Players (so they know where to go)
-                const p1MatchRef = doc(db, `artifacts/${appId}/public/data/event_data/matches/${p1.userId}`);
-                const p2MatchRef = doc(db, `artifacts/${appId}/public/data/event_data/matches/${p2.userId}`);
+                // FIX: Flattened path to 'event_matches'
+                const p1MatchRef = doc(db, `artifacts/${appId}/public/data/event_matches/${p1.userId}`);
+                const p2MatchRef = doc(db, `artifacts/${appId}/public/data/event_matches/${p2.userId}`);
                 
                 batch.set(p1MatchRef, { gameId: gameId, opponent: p2.username });
                 batch.set(p2MatchRef, { gameId: gameId, opponent: p1.username });
             }
 
-            // 4. Update Status to Started
-            const statusRef = doc(db, `artifacts/${appId}/public/data/event_data/status`);
+            // 4. Update Status
+            const statusRef = doc(db, `artifacts/${appId}/public/data/event_config/status`);
             batch.set(statusRef, { state: 'started' });
 
             try {
@@ -292,12 +288,8 @@
             }
         }
 
-
-        // --- USER MANAGER LOGIC ---
-
         async function fetchUsers() {
             userListEl.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">Loading...</td></tr>';
-            
             try {
                 const usersRef = collection(db, `artifacts/${appId}/public/data/registered_users`);
                 const q = query(usersRef, orderBy('createdAt', 'desc'));
