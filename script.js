@@ -15,7 +15,8 @@ import {
     serverTimestamp,
     arrayUnion,
     setLogLevel,
-    collection 
+    collection,
+    increment
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- FIREBASE CONFIG ---
@@ -294,6 +295,7 @@ let localPlayerRole = null;
 let localPlayerName = null;
 let opponentPlayerName = null;
 let musicStarted = false;
+let isEventGame = false; // NEW FLAG
 const MAX_TURNS = 20; 
 
 // --- DOM ELEMENTS ---
@@ -553,7 +555,7 @@ function initGame() {
     
     if (eventStatusUnsubscribe) eventStatusUnsubscribe();
     if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
-    if (eventMatchUnsubscribe) eventMatchUnsubscribe();
+    // Do NOT cancel match listener here, we might need it for re-joining
     
     // START LISTENING TO EVENT STATUS (Correct Path)
     listenToEventStatus();
@@ -575,7 +577,10 @@ function initGame() {
     localPlayerRole = null;
     opponentPlayerName = null;
     gameDocRef = null;
-    assignedGameId = null;
+    // Do NOT reset assignedGameId if we want to support back-to-back games, 
+    // but typically a new game means new ID.
+    // assignedGameId = null; 
+    isEventGame = false;
 
     battleLog.innerHTML = `<p id="battle-log-start">${getText('log_welcome')}</p>`;
     logReviewContent.innerHTML = '';
@@ -632,6 +637,8 @@ function showEventBattleScreen() {
     eventBattleScreen.classList.remove('hidden');
     mainTitle.classList.add('hidden');
     
+    // Resume match listening if we were knocked out or waiting
+    listenToMyMatch();
     checkEventSignInStatus();
 }
 
@@ -641,7 +648,8 @@ function hideEventBattleScreen() {
     mainTitle.classList.remove('hidden');
     
     if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
-    if (eventMatchUnsubscribe) eventMatchUnsubscribe();
+    // Keep match listener alive if possible, but safe to detach
+    // if (eventMatchUnsubscribe) eventMatchUnsubscribe();
 }
 
 function showEventLockedUI() {
@@ -668,11 +676,21 @@ async function checkEventSignInStatus() {
         eventSignInContainer.classList.add('hidden');
         eventSignedInContainer.classList.remove('hidden');
         eventPlayerName.textContent = localPlayerName || "Trainer";
+        
+        // Check if waiting for next round
+        const data = docSnap.data();
+        if (data.status === 'waiting') {
+             eventStatusMsg.textContent = "You won! Waiting for next round pairing...";
+             eventStatusMsg.className = "text-green-300 animate-pulse font-bold";
+        }
     } else {
         eventSignInContainer.classList.remove('hidden');
         eventSignedInContainer.classList.add('hidden');
     }
-    showEventLobbyUI();
+    // Only show general lobby if not matched
+    if (eventMatchReadyContainer.classList.contains('hidden')) {
+        showEventLobbyUI();
+    }
 }
 
 async function joinEvent() {
@@ -689,6 +707,7 @@ async function joinEvent() {
         await setDoc(participantRef, {
             userId: userId,
             username: localPlayerName,
+            status: 'waiting',
             joinedAt: serverTimestamp()
         });
         checkEventSignInStatus();
@@ -743,10 +762,19 @@ function listenToMyMatch() {
     eventMatchUnsubscribe = onSnapshot(matchRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            assignedGameId = data.gameId;
-            
-            eventLobbyUI.classList.add('hidden');
-            eventMatchReadyContainer.classList.remove('hidden');
+            // Only trigger if we get a NEW game ID
+            if (data.gameId && data.gameId !== assignedGameId) {
+                assignedGameId = data.gameId;
+                
+                // Auto-join logic
+                eventLobbyUI.classList.add('hidden');
+                eventMatchReadyContainer.classList.remove('hidden');
+                
+                // If we are on the event screen, auto-join
+                if (!eventBattleScreen.classList.contains('hidden')) {
+                    setTimeout(() => joinAssignedMatch(), 1000);
+                }
+            }
         }
     });
 }
@@ -757,6 +785,7 @@ function joinAssignedMatch() {
     hideEventBattleScreen();
     showLobbyScreen();
     gameIdInput.value = assignedGameId;
+    isEventGame = true; // Mark as event game
     
     setTimeout(() => {
         joinGame();
@@ -1084,8 +1113,9 @@ function listenToGame() {
     gameUnsubscribe = onSnapshot(gameDocRef, (doc) => {
         if (!doc.exists()) {
             if (gameInProgress) {
-                logMessage(getText('log_opponent_forfeit'));
-                showVictoryScreen(playerPokemon, 'victory');
+                // If it was an event game and we were winning or playing, assume round ended
+                // But generally, deletion means game over.
+                // We handle winner/loser in checkGameOver mostly.
             } else {
                 initGame();
             }
@@ -1093,6 +1123,11 @@ function listenToGame() {
         }
 
         const gameData = doc.data();
+        // Propagate the event flag if it exists in the game data
+        if (gameData.isEvent) {
+            isEventGame = true;
+        }
+        
         const opponentRole = localPlayerRole === 'player1' ? 'player2' : 'player1';
 
         currentTurn = gameData.currentTurn;
@@ -1538,6 +1573,29 @@ function showVictoryScreen(winner, messageKey) {
     restartButton.textContent = getText('play_again');
     showLogButton.textContent = getText('view_log');
 
+    // Handle Event Mode Progression
+    if (isEventGame) {
+        // If we won, update status to waiting for next round
+        if (messageKey === 'victory') {
+            updateDoc(doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`), {
+                status: 'waiting',
+                updatedAt: serverTimestamp()
+            });
+            // Show custom message
+            victoryText.textContent = "Round Won! Returning to Lobby...";
+            setTimeout(() => {
+                showEventBattleScreen(); // This will show the "Waiting for next round" state
+            }, 3000);
+        } else {
+            // Lost or draw
+            victoryText.textContent = "Eliminated!";
+            // Reset status or mark eliminated
+            setTimeout(() => {
+                showEventBattleScreen();
+            }, 3000);
+        }
+    }
+
     if (gameUnsubscribe) {
         gameUnsubscribe();
         gameUnsubscribe = null;
@@ -1550,11 +1608,22 @@ function showVictoryScreen(winner, messageKey) {
         }, 10000); 
     }
 
-    setTimeout(() => {
-        battleScreen.classList.add('hidden');
-        victoryScreen.classList.remove('hidden');
-        mainTitle.classList.add('hidden');
-    }, 1000);
+    if (!isEventGame) {
+        setTimeout(() => {
+            battleScreen.classList.add('hidden');
+            victoryScreen.classList.remove('hidden');
+            mainTitle.classList.add('hidden');
+        }, 1000);
+    } else {
+        // For events, we handle transition above, but ensure screens are toggled if needed
+        if (messageKey !== 'victory') {
+             setTimeout(() => {
+                battleScreen.classList.add('hidden');
+                victoryScreen.classList.remove('hidden');
+                mainTitle.classList.add('hidden');
+            }, 1000);
+        }
+    }
 }
 
 function logMessage(message, forceClear = false) {
