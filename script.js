@@ -29,6 +29,7 @@ const firebaseConfig = {
   measurementId: "G-RC3WBTFK5J"
 };
 
+// ... (UI_TEXT, MISS_MESSAGES, POKEMON_DATA objects remain unchanged) ...
 // --- TRANSLATION DATA ---
 const UI_TEXT = {
     'en': {
@@ -299,7 +300,7 @@ const MAX_TURNS = 20;
 let startScreen, selectionScreen, battleScreen, victoryScreen, helpScreen, lobbyScreen, eventBattleScreen, usernameScreen;
 let playAiButton, playFriendButton, eventBattleButton, helpButton, helpButtonText, helpTitle, helpRule1, helpRule2, helpRule3, helpBackButton;
 let lobbyTitle, playerUserId, yourUserIdLabel, createGameButton, lobbyOrDivider, gameIdInput, joinGameButton, lobbyErrorMsg, waitingForPlayerMsg, gameIdDisplay, gameIdLabel, gameIdText, lobbyBackButton;
-let eventBattleBtn, eventBackBtn; // Removed old event vars
+let eventBattleBtn, eventBackBtn; 
 // NEW EVENT VARS
 let eventLockedMsg, eventLobbyUI, eventSignInContainer, eventSignedInContainer, eventSignInBtn, eventSignOutBtn, eventStatusMsg, eventParticipantCount, eventPlayerName, eventMatchReadyContainer, eventJoinMatchBtn;
 
@@ -340,7 +341,7 @@ function initDomElements() {
     helpRule3 = document.getElementById('help-rule-3');
     helpBackButton = document.getElementById('help-back-btn');
 
-    // EVENT BATTLE ELEMENTS (UPDATED)
+    // EVENT BATTLE ELEMENTS
     eventBattleBtn = document.getElementById('event-battle-btn');
     eventBackBtn = document.getElementById('event-back-btn');
     
@@ -419,6 +420,7 @@ function initDomElements() {
     welcomeUserMsg = document.getElementById('welcome-user-msg');
 }
 
+// ... (getText, updateAllText, toggleLanguage, playBgMusic, initGame match previous logic but need to be included) ...
 function getText(key, ...args) {
     const textOrFn = UI_TEXT[currentLanguage][key];
     if (typeof textOrFn === 'function') {
@@ -553,6 +555,7 @@ function initGame() {
     if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
     if (eventMatchUnsubscribe) eventMatchUnsubscribe();
     
+    // START LISTENING TO EVENT STATUS (Correct Path)
     listenToEventStatus();
 
     if (gameDocRef && localPlayerRole === 'player1') {
@@ -593,18 +596,17 @@ function initGame() {
 // --- EVENT BATTLE LOGIC ---
 
 function listenToEventStatus() {
-    // Path: artifacts/{appId}/public/data/event_data/status
-    const docRef = doc(db, `artifacts/${appId}/public/data/event_data/status`);
+    // FIX: Path to match Index5.html (event_config/status)
+    const docRef = doc(db, `artifacts/${appId}/public/data/event_config/status`);
     eventStatusUnsubscribe = onSnapshot(docRef, (docSnap) => {
         const data = docSnap.data();
-        const state = data ? data.state : 'locked'; // Default to locked
+        const state = data ? data.state : 'locked';
 
         if (state === 'locked') {
             eventBattleBtn.disabled = true;
             eventBattleBtn.textContent = "Event Locked";
             eventBattleBtn.style.backgroundColor = "#555";
             eventBattleBtn.style.color = "#888";
-            // If user is currently ON the screen, kick them out or show locked msg
             if (!eventBattleScreen.classList.contains('hidden')) {
                  showEventLockedUI();
             }
@@ -615,9 +617,7 @@ function listenToEventStatus() {
             eventBattleBtn.style.color = "#fff";
             
             if (!eventBattleScreen.classList.contains('hidden')) {
-                // If on screen, update the inner UI
                 if (state === 'started') {
-                    // Check for match
                     listenToMyMatch();
                 } else {
                     showEventLobbyUI();
@@ -632,7 +632,6 @@ function showEventBattleScreen() {
     eventBattleScreen.classList.remove('hidden');
     mainTitle.classList.add('hidden');
     
-    // Check if we are already signed in
     checkEventSignInStatus();
 }
 
@@ -641,7 +640,6 @@ function hideEventBattleScreen() {
     eventBattleScreen.classList.add('hidden');
     mainTitle.classList.remove('hidden');
     
-    // Stop listening to specific event details (keep status listener active though)
     if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
     if (eventMatchUnsubscribe) eventMatchUnsubscribe();
 }
@@ -657,22 +655,20 @@ function showEventLobbyUI() {
     eventLobbyUI.classList.remove('hidden');
     eventMatchReadyContainer.classList.add('hidden');
     
-    // Start counting participants for the Odd/Even message
     listenToEventParticipants();
 }
 
 async function checkEventSignInStatus() {
     if (!userId) return;
-    const participantRef = doc(db, `artifacts/${appId}/public/data/event_data/participants/${userId}`);
+    // FIX: Flattened Path (event_participants)
+    const participantRef = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
     const docSnap = await getDoc(participantRef);
     
     if (docSnap.exists()) {
-        // User is signed in
         eventSignInContainer.classList.add('hidden');
         eventSignedInContainer.classList.remove('hidden');
         eventPlayerName.textContent = localPlayerName || "Trainer";
     } else {
-        // User is not signed in
         eventSignInContainer.classList.remove('hidden');
         eventSignedInContainer.classList.add('hidden');
     }
@@ -686,7 +682,8 @@ async function joinEvent() {
     }
     
     eventSignInBtn.disabled = true;
-    const participantRef = doc(db, `artifacts/${appId}/public/data/event_data/participants/${userId}`);
+    // FIX: Flattened Path (event_participants)
+    const participantRef = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
     
     try {
         await setDoc(participantRef, {
@@ -706,7 +703,8 @@ async function leaveEvent() {
     if (!confirm("Are you sure you want to sign out of the event?")) return;
     
     eventSignOutBtn.disabled = true;
-    const participantRef = doc(db, `artifacts/${appId}/public/data/event_data/participants/${userId}`);
+    // FIX: Flattened Path (event_participants)
+    const participantRef = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
     
     try {
         await deleteDoc(participantRef);
@@ -721,7 +719,8 @@ async function leaveEvent() {
 function listenToEventParticipants() {
     if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
     
-    const colRef = collection(db, `artifacts/${appId}/public/data/event_data/participants`);
+    // FIX: Flattened Path (event_participants)
+    const colRef = collection(db, `artifacts/${appId}/public/data/event_participants`);
     eventParticipantsUnsubscribe = onSnapshot(colRef, (snapshot) => {
         const count = snapshot.size;
         eventParticipantCount.textContent = count;
@@ -739,14 +738,13 @@ function listenToEventParticipants() {
 function listenToMyMatch() {
     if (eventMatchUnsubscribe) eventMatchUnsubscribe();
     
-    // Look for a doc with my userId in matches
-    const matchRef = doc(db, `artifacts/${appId}/public/data/event_data/matches/${userId}`);
+    // FIX: Flattened Path (event_matches)
+    const matchRef = doc(db, `artifacts/${appId}/public/data/event_matches/${userId}`);
     eventMatchUnsubscribe = onSnapshot(matchRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             assignedGameId = data.gameId;
             
-            // Show Match UI
             eventLobbyUI.classList.add('hidden');
             eventMatchReadyContainer.classList.remove('hidden');
         }
@@ -756,14 +754,10 @@ function listenToMyMatch() {
 function joinAssignedMatch() {
     if (!assignedGameId) return;
     
-    // Hide event screen
     hideEventBattleScreen();
-    
-    // Simulate Lobby Joining
     showLobbyScreen();
     gameIdInput.value = assignedGameId;
     
-    // Auto-click join (small delay to ensure state is ready)
     setTimeout(() => {
         joinGame();
     }, 500);
