@@ -100,9 +100,9 @@
 
         <!-- START SCREEN -->
         <div id="start-screen" class="hidden text-center">
-            <div class="flex flex-col items-center justify-center gap-6 p-8 md:p-12">
+            <div class="flex flex-col items-center justify-center gap-4 md:gap-6 p-4 md:p-12">
                 <!-- Welcome Message with Username -->
-                <p id="welcome-user-msg" class="text-white text-lg mb-4 font-bold" style="font-family: 'DotGothic16', sans-serif;"></p>
+                <p id="welcome-user-msg" class="text-white text-lg mb-2 font-bold" style="font-family: 'DotGothic16', sans-serif;"></p>
                 
                 <button id="play-ai-btn" class="retro-btn !text-base md:!text-xl !px-8 !py-4" style="background-color: #fa3df8; color: #fbbfff;">
                     ...
@@ -110,6 +110,12 @@
                 <button id="play-friend-btn" class="retro-btn !text-base md:!text-xl !px-8 !py-4" style="background-color: #610b9d;">
                     ...
                 </button>
+                
+                <!-- NEW LEADERBOARD BUTTON -->
+                <button id="leaderboard-btn" class="retro-btn !text-base md:!text-xl !px-8 !py-4" style="background-color: #f7d02c; color: #333;">
+                    Leaderboard
+                </button>
+
                 <button id="help-btn" class="retro-btn !text-base md:!text-xl !px-8 !py-4" style="background-color: #fa3df8; color: #fbbfff;">
                     <span class="mr-2">?</span>
                     <span id="help-btn-text">...</span>
@@ -150,6 +156,23 @@
 
                 <button id="lobby-back-btn" class="retro-btn !text-base md:!text-xl !px-8 !py-4 mt-8 w-full" style="background-color: #b90000; color: #fbbfff;">...</button>
             </div>
+        </div>
+
+        <!-- LEADERBOARD SCREEN -->
+        <div id="leaderboard-screen" class="hidden text-center text-white">
+            <h2 class="text-xl md:text-2xl mb-6 font-bold text-yellow-300" style="font-family: 'Press Start 2P', cursive;">Leaderboard</h2>
+            <div class="bg-black/60 p-4 rounded-lg border-2 border-yellow-500 max-w-lg mx-auto shadow-2xl">
+                <div class="grid grid-cols-3 gap-2 border-b-2 border-white/20 pb-2 mb-2 font-bold text-yellow-300 text-xs md:text-sm uppercase">
+                    <div>Rank</div>
+                    <div>Player</div>
+                    <div>Score</div>
+                </div>
+                <div id="leaderboard-list" class="space-y-2 text-xs md:text-sm h-64 overflow-y-auto custom-scrollbar">
+                    <!-- Rows will be injected here -->
+                    <p class="text-gray-400 py-4">Loading top players...</p>
+                </div>
+            </div>
+            <button id="leaderboard-back-btn" class="retro-btn !text-base md:!text-xl !px-8 !py-4 mt-8 w-full" style="background-color: #610b9d;">Back</button>
         </div>
 
         <!-- HELP SCREEN -->
