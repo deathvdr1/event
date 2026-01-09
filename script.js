@@ -1080,6 +1080,26 @@ async function joinGame() {
         if (!gameSnap.exists()) throw new Error("Game not found");
         
         const gameData = gameSnap.data();
+
+        // --- NEW LOGIC FOR EVENT GAMES ---
+        if (isEventGame) {
+            // Admin has already created the game with P1 and P2 slots filled
+            // We just need to find which one we are
+            if (gameData.player1 && gameData.player1.username === localPlayerName) {
+                localPlayerRole = 'player1';
+            } else if (gameData.player2 && gameData.player2.username === localPlayerName) {
+                localPlayerRole = 'player2';
+            } else {
+                throw new Error("You are not assigned to this match!");
+            }
+            
+            // We do NOT write to the doc, Admin did that. We just listen.
+            gameDocRef = gameRef;
+            listenToGame();
+            return; // Exit function, don't run standard join logic
+        }
+        // ---------------------------------
+
         if (gameData.player2) throw new Error("Game is full");
         
         const player2Data = {
@@ -1103,7 +1123,7 @@ async function joinGame() {
 
     } catch (e) {
         console.error("Error joining game:", e);
-        lobbyErrorMsg.textContent = getText('lobby_error_joining');
+        lobbyErrorMsg.textContent = getText('lobby_error_joining') + " " + e.message;
         createGameButton.disabled = false;
         joinGameButton.disabled = false;
         gameIdInput.disabled = false;
