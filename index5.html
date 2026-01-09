@@ -103,7 +103,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Updated import to include signInWithCustomToken
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, collection, getDocs, deleteDoc, doc, setDoc, 
             orderBy, query, onSnapshot, serverTimestamp, writeBatch 
@@ -129,7 +130,9 @@
         appIdDisplay.textContent = `App ID: ${appId}`;
 
         // INIT FIREBASE
-        const app = initializeApp(firebaseConfig);
+        // Use provided config if available, otherwise use the static one
+        const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
+        const app = initializeApp(config);
         const db = getFirestore(app);
         const auth = getAuth(app);
         
@@ -146,7 +149,13 @@
 
         async function init() {
             try {
-                await signInAnonymously(auth);
+                // Improved Authentication Logic
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
                 statusDiv.firstElementChild.textContent = "✅ Connected to Database";
                 statusDiv.classList.remove('bg-blue-900', 'border-blue-500');
                 statusDiv.classList.add('bg-green-900', 'border-green-500');
@@ -163,7 +172,7 @@
                 refreshUsersBtn.addEventListener('click', fetchUsers);
             } catch (e) {
                 console.error("Auth failed", e);
-                statusDiv.firstElementChild.textContent = "❌ Connection Failed";
+                statusDiv.firstElementChild.textContent = "❌ Connection Failed: " + e.message;
                 statusDiv.classList.remove('bg-blue-900', 'border-blue-500');
                 statusDiv.classList.add('bg-red-900', 'border-red-500');
             }
