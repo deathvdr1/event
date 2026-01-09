@@ -1,3 +1,4 @@
+// ... (Imports and Config remain same as previous, including UI_TEXT, MISS_MESSAGES, POKEMON_DATA) ...
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -15,8 +16,7 @@ import {
     serverTimestamp,
     arrayUnion,
     setLogLevel,
-    collection,
-    increment
+    collection 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- FIREBASE CONFIG ---
@@ -30,8 +30,7 @@ const firebaseConfig = {
   measurementId: "G-RC3WBTFK5J"
 };
 
-// ... (UI_TEXT, MISS_MESSAGES, POKEMON_DATA objects remain unchanged) ...
-// --- TRANSLATION DATA ---
+// ... (UI_TEXT, MISS_MESSAGES, POKEMON_DATA objects - KEEP AS IS from previous versions) ...
 const UI_TEXT = {
     'en': {
         'title_battle': '(re)Pokémon Battle',
@@ -97,6 +96,7 @@ const UI_TEXT = {
         'welcome_user': (name) => `Welcome, ${name}!`,
     },
     'ja': {
+        // ... (Keep existing JA translations) ...
         'title_battle': 'ポケモンバトル',
         'title_choose': 'ポケモンをえらんでね！',
         'play_ai': 'AIとたいせん',
@@ -161,7 +161,6 @@ const UI_TEXT = {
     }
 };
 
-// --- MISS_MESSAGES ---
 const MISS_MESSAGES = {
     'en': [
         "its brain momentarily believed it was JMike the Pirate and went searching for buried treasure.",
@@ -204,7 +203,6 @@ const MISS_MESSAGES = {
     ]
 };
 
-// --- DATA ---
 const POKEMON_DATA = {
     'en': [
         { id: 1, name: 'Pika(re)', type: 'electric', image: './pika.png', attacks: [
@@ -295,7 +293,7 @@ let localPlayerRole = null;
 let localPlayerName = null;
 let opponentPlayerName = null;
 let musicStarted = false;
-let isEventGame = false; // NEW FLAG
+let isEventGame = false;
 const MAX_TURNS = 20; 
 
 // --- DOM ELEMENTS ---
@@ -702,8 +700,13 @@ async function joinEvent() {
     eventSignInBtn.disabled = true;
     // FIX: Flattened Path (event_participants)
     const participantRef = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
+    // CRITICAL FIX: Clear old match data to prevent "Game Full" error
+    const matchRef = doc(db, `artifacts/${appId}/public/data/event_matches/${userId}`);
     
     try {
+        // Clear stale match
+        await deleteDoc(matchRef);
+        // Set new participant entry
         await setDoc(participantRef, {
             userId: userId,
             username: localPlayerName,
@@ -1113,9 +1116,8 @@ function listenToGame() {
     gameUnsubscribe = onSnapshot(gameDocRef, (doc) => {
         if (!doc.exists()) {
             if (gameInProgress) {
-                // If it was an event game and we were winning or playing, assume round ended
-                // But generally, deletion means game over.
-                // We handle winner/loser in checkGameOver mostly.
+                logMessage(getText('log_opponent_forfeit'));
+                showVictoryScreen(playerPokemon, 'victory');
             } else {
                 initGame();
             }
