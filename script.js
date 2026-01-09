@@ -16,7 +16,10 @@ import {
     serverTimestamp,
     arrayUnion,
     setLogLevel,
-    collection 
+    collection,
+    increment,
+    orderBy,
+    limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- FIREBASE CONFIG ---
@@ -94,6 +97,7 @@ const UI_TEXT = {
         'player1_name': 'Player 1',
         'player2_name': 'Player 2',
         'welcome_user': (name) => `Welcome, ${name}!`,
+        'leaderboard': 'Leaderboard',
     },
     'ja': {
         // ... (Keep existing JA translations) ...
@@ -158,6 +162,7 @@ const UI_TEXT = {
         'player1_name': 'プレイヤー1',
         'player2_name': 'プレイヤー2',
         'welcome_user': (name) => `ようこそ、${name}さん！`,
+        'leaderboard': 'リーダーボード',
     }
 };
 
@@ -304,6 +309,9 @@ let eventBattleBtn, eventBackBtn;
 // NEW EVENT VARS
 let eventLockedMsg, eventLobbyUI, eventSignInContainer, eventSignedInContainer, eventSignInBtn, eventSignOutBtn, eventStatusMsg, eventParticipantCount, eventPlayerName, eventMatchReadyContainer, eventJoinMatchBtn;
 
+// NEW LEADERBOARD VARS
+let leaderboardBtn, leaderboardScreen, leaderboardList, leaderboardBackBtn;
+
 let pokemonCardDisplay, prevPokemonButton, nextPokemonButton, selectionTitle, waitingForOpponentSelection;
 let playerBox, opponentBox, opponentPokemonName, opponentHpText, opponentHpBar, opponentPokemonImg, playerUsernameEl, opponentUsernameEl;
 let playerPokemonName, playerHpText, playerHpBar, playerPokemonImg;
@@ -329,10 +337,12 @@ function initDomElements() {
     helpScreen = document.getElementById('help-screen');
     lobbyScreen = document.getElementById('lobby-screen');
     eventBattleScreen = document.getElementById('event-battle-screen');
+    leaderboardScreen = document.getElementById('leaderboard-screen');
 
     playAiButton = document.getElementById('play-ai-btn');
     playFriendButton = document.getElementById('play-friend-btn');
     eventBattleBtn = document.getElementById('event-battle-btn');
+    leaderboardBtn = document.getElementById('leaderboard-btn');
     helpButton = document.getElementById('help-btn');
     helpButtonText = document.getElementById('help-btn-text');
     helpTitle = document.getElementById('help-title');
@@ -356,6 +366,10 @@ function initDomElements() {
     eventPlayerName = document.getElementById('event-player-name');
     eventMatchReadyContainer = document.getElementById('event-match-ready-container');
     eventJoinMatchBtn = document.getElementById('event-join-match-btn');
+
+    // LEADERBOARD ELEMENTS
+    leaderboardList = document.getElementById('leaderboard-list');
+    leaderboardBackBtn = document.getElementById('leaderboard-back-btn');
 
     lobbyTitle = document.getElementById('lobby-title');
     playerUserId = document.getElementById('player-user-id');
@@ -437,6 +451,7 @@ function updateAllText() {
         mainTitle.style.color = '#6d47fb';
         playAiButton.textContent = getText('play_ai');
         playFriendButton.textContent = getText('play_friend');
+        leaderboardBtn.textContent = getText('leaderboard');
         helpButtonText.textContent = getText('help');
         if (localPlayerName) {
             welcomeUserMsg.textContent = getText('welcome_user', localPlayerName);
@@ -544,6 +559,7 @@ function initGame() {
     helpScreen.classList.add('hidden');
     lobbyScreen.classList.add('hidden');
     eventBattleScreen.classList.add('hidden');
+    leaderboardScreen.classList.add('hidden');
     mainTitle.classList.remove('hidden');
     
     if (gameUnsubscribe) {
@@ -593,6 +609,78 @@ function initGame() {
     gameIdInput.disabled = false;
     
     updateAllText();
+}
+
+
+// --- LEADERBOARD LOGIC ---
+
+async function showLeaderboard() {
+    startScreen.classList.add('hidden');
+    leaderboardScreen.classList.remove('hidden');
+    mainTitle.classList.add('hidden');
+    
+    leaderboardList.innerHTML = '<p class="text-gray-400 py-4">Loading top players...</p>';
+    
+    try {
+        const usersRef = collection(db, `artifacts/${appId}/public/data/registered_users`);
+        // Query top 10 by score desc
+        const q = query(usersRef, orderBy("score", "desc"), limit(10));
+        const snapshot = await getDocs(q);
+        
+        leaderboardList.innerHTML = '';
+        
+        if (snapshot.empty) {
+            leaderboardList.innerHTML = '<p class="text-gray-400 py-4">No scores yet.</p>';
+            return;
+        }
+        
+        let rank = 1;
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const score = data.score || 0;
+            const name = data.username || "Unknown";
+            
+            const div = document.createElement('div');
+            div.className = "grid grid-cols-3 gap-2 border-b border-white/10 py-2 items-center hover:bg-white/5";
+            
+            // Highlight top 3
+            let rankClass = "text-white";
+            if (rank === 1) rankClass = "text-yellow-400 font-bold";
+            else if (rank === 2) rankClass = "text-gray-300 font-bold";
+            else if (rank === 3) rankClass = "text-orange-400 font-bold";
+            
+            div.innerHTML = `
+                <div class="${rankClass}">#${rank}</div>
+                <div class="truncate text-left">${name}</div>
+                <div class="text-green-400 font-mono">${score}</div>
+            `;
+            leaderboardList.appendChild(div);
+            rank++;
+        });
+        
+    } catch (e) {
+        console.error("Error fetching leaderboard:", e);
+        leaderboardList.innerHTML = '<p class="text-red-400 py-4">Error loading leaderboard.</p>';
+    }
+}
+
+function hideLeaderboard() {
+    leaderboardScreen.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+    mainTitle.classList.remove('hidden');
+}
+
+async function incrementUserScore() {
+    if (!userId) return;
+    const userRef = doc(db, `artifacts/${appId}/public/data/registered_users/${userId}`);
+    try {
+        await updateDoc(userRef, {
+            score: increment(1)
+        });
+        console.log("Score incremented!");
+    } catch (e) {
+        console.error("Error updating score:", e);
+    }
 }
 
 
@@ -844,6 +932,7 @@ async function handleSaveUsername() {
         await setDoc(userDocRef, {
             username: inputName,
             userId: userId,
+            score: 0, // Initialize score
             createdAt: serverTimestamp()
         });
         
@@ -1584,6 +1673,10 @@ function showVictoryScreen(winner, messageKey) {
     if (messageKey === 'victory') {
         victoryText.textContent = getText('victory', localPlayerName || 'Player');
         victoryText.className = 'victory-text-base victory-text-win';
+        // NEW: Increment Score for multiplayer/event
+        if (gameMode === 'multiplayer' || isEventGame) {
+            incrementUserScore();
+        }
     } else if (messageKey === 'defeat') {
         victoryText.textContent = getText('defeat', opponentPlayerName || 'Opponent');
         victoryText.className = 'victory-text-base victory-text-lose';
@@ -1710,6 +1803,9 @@ function initEventListeners() {
     eventSignOutBtn.addEventListener('click', leaveEvent);
     eventJoinMatchBtn.addEventListener('click', joinAssignedMatch);
     
+    leaderboardBtn.addEventListener('click', showLeaderboard);
+    leaderboardBackBtn.addEventListener('click', hideLeaderboard);
+
     helpButton.addEventListener('click', showHelpScreen);
     helpBackButton.addEventListener('click', hideHelpScreen);
 
