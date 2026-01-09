@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meteor Dodger - Daily Loot</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            background-color: #000;
+            border: 2px solid #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* UI Screens */
+        .ui-screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+            padding-top: 20px;
+            box-sizing: border-box;
+        }
+
+        .hidden { display: none !important; }
+
+        h1 { margin: 10px 0; font-size: 28px; color: #00ff88; text-shadow: 0 0 10px #00ff88; }
+        h2 { margin: 5px 0; font-size: 18px; color: #fff; }
+
+        input {
+            padding: 10px;
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #00ff88;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+            transition: 0.2s;
+        }
+        button:hover { background: #00cc6a; transform: scale(1.05); }
+        button:disabled { background: #555; color: #888; cursor: not-allowed; transform: none;}
+
+        /* Inventory & Daily Styles */
+        .inventory-box {
+            background: #222;
+            border: 1px solid #444;
+            padding: 10px;
+            width: 80%;
+            margin: 10px 0;
+            border-radius: 5px;
+            text-align: left;
+        }
+
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .loot-btn {
+            background: #ffaa00;
+            color: #000;
+            width: 80%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 170, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0); } }
+
+        /* HUD */
+        #hud-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        #score-hud { position: absolute; top: 10px; right: 10px; font-weight: bold; font-size: 20px;}
+        #lives-hud { position: absolute; top: 10px; left: 10px; color: #ff4444; font-weight: bold; font-size: 20px;}
+        #buff-hud { position: absolute; top: 40px; left: 10px; color: #00ccff; font-weight: bold; font-size: 14px;}
+
+        /* Leaderboard */
+        #leaderboard-list {
+            list-style: none; padding: 0; margin: 10px 0;
+            width: 80%; height: 150px; overflow-y: auto;
+            border: 1px solid #333; text-align: left; font-size: 12px;
+        }
+        #leaderboard-list li { padding: 5px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; }
+
+        /* Feedback Messages */
+        #loot-msg { color: #ffaa00; font-weight: bold; height: 20px; margin-bottom: 5px;}
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    
+    <div id="hud-layer">
+        <div id="lives-hud">Lives: 1</div>
+        <div id="score-hud">0</div>
+        <div id="buff-hud"></div>
+    </div>
+
+    <div id="start-screen" class="ui-screen">
+        <h1>METEOR LANE</h1>
+        
+        <div id="login-section">
+            <input type="text" id="username-input" placeholder="Username" maxlength="10">
+            <button id="connect-btn">CONNECT</button>
+        </div>
+
+        <div id="lobby-section" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+            <div id="loot-msg"></div>
+            <button id="daily-btn" class="loot-btn hidden">OPEN DAILY LOOTBOX!</button>
+            
+            <div class="inventory-box">
+                <div style="text-align:center; color:#888; margin-bottom:5px;">-- INVENTORY --</div>
+                
+                <div class="item-row">
+                    <span>❤️ Extra Lives</span>
+                    <span id="inv-lives">0</span>
+                </div>
+                
+                <div class="item-row">
+                    <span>🛡️ Invincibility (10s)</span>
+                    <label><input type="checkbox" id="use-shield"> Use (Qty: <span id="inv-shield">0</span>)</label>
+                </div>
+
+                <div class="item-row">
+                    <span>⏱️ Time Warp (10s)</span>
+                    <label><input type="checkbox" id="use-slow"> Use (Qty: <span id="inv-slow">0</span>)</label>
+                </div>
+            </div>
+
+            <button id="start-btn" style="width: 80%;">LAUNCH SHIP</button>
+        </div>
+        
+        <p id="status-msg" style="font-size: 12px; color: #888; margin-top: auto; padding-bottom: 10px;">Not Connected</p>
+    </div>
+
+    <div id="game-over-screen" class="ui-screen hidden">
+        <h1 style="color: #ff4444;">CRITICAL FAILURE</h1>
+        <h2>Final Score: <span id="final-score">0</span></h2>
+        
+        <ul id="leaderboard-list">
+            <li>Loading...</li>
+        </ul>
+
+        <button id="restart-btn">RETURN TO BASE</button>
+    </div>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    const LL_API_KEY = "YOUR_GAME_API_KEY_HERE"; 
+    const LL_LEADERBOARD_KEY = "YOUR_LEADERBOARD_ID_HERE"; 
+    const LL_VERSION = "0.0.2.0";
+
+    // --- GAME STATE ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let gameRunning = false;
+    let score = 0;
+    let baseSpeed = 5;
+    let currentSpeed = 5;
+    let frameCount = 0;
+    
+    // Player Stats
+    let player = { lane: 1, y: 500, width: 40, height: 60, color: '#00ff88', lives: 1 };
+    let meteors = [];
+    
+    // Buff States
+    let isInvincible = false;
+    let invincibleTimer = 0;
+    let isSlowed = false;
+    let slowTimer = 0;
+
+    // Backend/Inventory State
+    let playerData = {
+        lastLogin: null,
+        inventory: {
+            lives: 0,
+            shield: 0,
+            slow: 0
+        }
+    };
+
+    // DOM Elements
+    const els = {
+        startScreen: document.getElementById('start-screen'),
+        gameOverScreen: document.getElementById('game-over-screen'),
+        loginSection: document.getElementById('login-section'),
+        lobbySection: document.getElementById('lobby-section'),
+        connectBtn: document.getElementById('connect-btn'),
+        dailyBtn: document.getElementById('daily-btn'),
+        startBtn: document.getElementById('start-btn'),
+        restartBtn: document.getElementById('restart-btn'),
+        statusMsg: document.getElementById('status-msg'),
+        lootMsg: document.getElementById('loot-msg'),
+        invLives: document.getElementById('inv-lives'),
+        invShield: document.getElementById('inv-shield'),
+        invSlow: document.getElementById('inv-slow'),
+        useShield: document.getElementById('use-shield'),
+        useSlow: document.getElementById('use-slow'),
+        hudLives: document.getElementById('lives-hud'),
+        hudScore: document.getElementById('score-hud'),
+        hudBuff: document.getElementById('buff-hud'),
+        leaderboard: document.getElementById('leaderboard-list')
+    };
+
+    const laneWidth = canvas.width / 3;
+    const laneCenters = [laneWidth/2, laneWidth*1.5, laneWidth*2.5];
+
+    // --- LOOTLOCKER INTEGRATION ---
+
+    async function initLootLocker(username) {
+        els.statusMsg.innerText = "Connecting...";
+        
+        // 1. Session
+        const res = await fetch('https://api.lootlocker.io/game/v2/session/guest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_key: LL_API_KEY, game_version: LL_VERSION })
+        });
+        const data = await res.json();
+        
+        if(!data.session_token) { alert("API Error"); return false; }
+        
+        const token = data.session_token;
+        localStorage.setItem('ll_token', token);
+
+        // 2. Set Name
+        await fetch('https://api.lootlocker.io/game/v1/player/name', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+            body: JSON.stringify({ name: username })
+        });
+
+        // 3. Load Storage (Inventory/Daily)
+        await loadPlayerStorage(token);
+
+        return true;
+    }
+
+    async function loadPlayerStorage(token) {
+        const res = await fetch('https://api.lootlocker.io/game/v1/player/storage', {
+            headers: { 'x-session-token': token }
+        });
+        const data = await res.json();
+        
+        // Find our data key
+        const storeItem = data.payload.find(i => i.key === 'daily_data');
+        
+        if (storeItem) {
+            playerData = JSON.parse(storeItem.value);
+        } else {
+            // New player default
+            playerData = { lastLogin: null, inventory: { lives: 0, shield: 0, slow: 0 } };
+        }
+
+        updateInventoryUI();
+        checkDailyLogin();
+    }
+
+    async function savePlayerStorage() {
+        const token = localStorage.getItem('ll_token');
+        await fetch('https://api.lootlocker.io/game/v1/player/storage', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+            body: JSON.stringify({
+                payload: [{
+                    key: 'daily_data',
+                    value: JSON.stringify(playerData),
+                    is_public: false
+                }]
+            })
+        });
+    }
+
+    function updateInventoryUI() {
+        els.invLives.innerText = playerData.inventory.lives;
+        els.invShield.innerText = playerData.inventory.shield;
+        els.invSlow.innerText = playerData.inventory.slow;
+
+        // Disable checkboxes if count is 0
+        els.useShield.disabled = playerData.inventory.shield <= 0;
+        els.useSlow.disabled = playerData.inventory.slow <= 0;
+        
+        if(els.useShield.disabled) els.useShield.checked = false;
+        if(els.useSlow.disabled) els.useSlow.checked = false;
+    }
+
+    function checkDailyLogin() {
+        const today = new Date().toDateString(); // e.g., "Mon Dec 09 2025"
+        
+        if (playerData.lastLogin !== today) {
+            els.dailyBtn.classList.remove('hidden');
+            els.lootMsg.innerText = "Daily Reward Available!";
+        } else {
+            els.dailyBtn.classList.add('hidden');
+            els.lootMsg.innerText = "";
+        }
+    }
+
+    // --- LOOTBOX LOGIC ---
+
+    els.dailyBtn.addEventListener('click', async () => {
+        // RNG Logic
+        const roll = Math.random();
+        let rewardText = "";
+
+        if (roll < 0.05) {
+            playerData.inventory.shield++;
+            rewardText = "LEGENDARY! Got 1x Invincibility!";
+        } else if (roll < 0.20) {
+            playerData.inventory.slow++;
+            rewardText = "Got 1x Time Warp!";
+        } else if (roll < 0.30) {
+            playerData.inventory.lives += 2;
+            rewardText = "Lucky! Got 2 Extra Lives!";
+        } else {
+            playerData.inventory.lives += 1;
+            rewardText = "Got 1 Extra Life.";
+        }
+
+        // Update Data
+        playerData.lastLogin = new Date().toDateString();
+        
+        // Save to Cloud
+        els.dailyBtn.disabled = true;
+        els.dailyBtn.innerText = "Saving...";
+        await savePlayerStorage();
+        
+        // Update UI
+        els.dailyBtn.classList.add('hidden');
+        els.lootMsg.innerText = rewardText;
+        updateInventoryUI();
+        els.dailyBtn.disabled = false;
+        els.dailyBtn.innerText = "OPEN DAILY LOOTBOX!";
+    });
+
+    // --- GAMEPLAY ---
+
+    function startGame() {
+        score = 0;
+        baseSpeed = 5;
+        currentSpeed = 5;
+        meteors = [];
+        player.lane = 1;
+        player.lives = 1; // Base life
+
+        // Apply Inventory Items
+        // 1. Lives (Automatic)
+        if (playerData.inventory.lives > 0) {
+            // Just use them? Let's say we use UP TO 3 from inventory to prevent infinite stacking
+            // Or just add all. Let's add all.
+            player.lives += playerData.inventory.lives;
+        }
+
+        // 2. Shield (Checkbox)
+        isInvincible = false;
+        if (els.useShield.checked && playerData.inventory.shield > 0) {
+            isInvincible = true;
+            invincibleTimer = 600; // 10 seconds * 60fps
+            playerData.inventory.shield--;
+        }
+
+        // 3. Slow (Checkbox)
+        isSlowed = false;
+        if (els.useSlow.checked && playerData.inventory.slow > 0) {
+            isSlowed = true;
+            slowTimer = 600; // 10 seconds
+            playerData.inventory.slow--;
+        }
+
+        // Save consumption immediately so refreshing doesn't refund items
+        savePlayerStorage();
+        updateInventoryUI();
+
+        gameRunning = true;
+        els.startScreen.classList.add('hidden');
+        requestAnimationFrame(gameLoop);
+    }
+
+    function update() {
+        if (!gameRunning) return;
+
+        frameCount++;
+
+        // Buff Timers
+        if (isInvincible) {
+            invincibleTimer--;
+            if (invincibleTimer <= 0) isInvincible = false;
+        }
+        
+        if (isSlowed) {
+            slowTimer--;
+            if (slowTimer <= 0) isSlowed = false;
+        }
+
+        // Calculate Speed
+        let activeSpeed = baseSpeed;
+        if (isSlowed) activeSpeed = baseSpeed * 0.5;
+
+        // Difficulty scaling
+        if (score > 0 && score % 500 === 0) baseSpeed += 0.02;
+
+        // Spawn Meteors
+        let spawnRate = Math.max(20, 60 - Math.floor(score / 200));
+        if (isSlowed) spawnRate *= 2; // Spawn slower if time is slowed
+
+        if (frameCount % Math.floor(spawnRate) === 0) {
+            const rLane = Math.floor(Math.random() * 3);
+            meteors.push({ lane: rLane, y: -60, w: 50, h: 50 });
+        }
+
+        // Update Objects
+        for (let i = meteors.length - 1; i >= 0; i--) {
+            let m = meteors[i];
+            m.y += activeSpeed;
+
+            // Collision
+            if (m.lane === player.lane && 
+                player.y < m.y + m.h && 
+                player.y + player.height > m.y) {
+                
+                if (!isInvincible) {
+                    playerHit(i); // Pass index to remove meteor
+                }
+            }
+
+            // Cleanup
+            if (m.y > canvas.height) {
+                meteors.splice(i, 1);
+                score += 10;
+            }
+        }
+    }
+
+    function playerHit(meteorIndex) {
+        meteors.splice(meteorIndex, 1); // Remove the rock that hit us
+        player.lives--;
+        
+        // Shake screen effect logic could go here
+        
+        if (player.lives <= 0) {
+            endGame();
+        } else {
+            // Temporary iframe on hit
+            isInvincible = true;
+            invincibleTimer = 60; // 1 second mercy
+        }
+    }
+
+    function draw() {
+        // BG
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Lanes
+        ctx.strokeStyle = '#222';
+        ctx.beginPath();
+        ctx.moveTo(laneWidth, 0); ctx.lineTo(laneWidth, 600);
+        ctx.moveTo(laneWidth*2, 0); ctx.lineTo(laneWidth*2, 600);
+        ctx.stroke();
+
+        // Player
+        let px = laneCenters[player.lane];
+        ctx.fillStyle = isInvincible ? '#fff' : player.color;
+        
+        // Flicker if invincible
+        if (isInvincible && Math.floor(Date.now() / 50) % 2 === 0) ctx.fillStyle = '#555';
+
+        ctx.beginPath();
+        ctx.moveTo(px, player.y);
+        ctx.lineTo(px - 20, player.y + 60);
+        ctx.lineTo(px + 20, player.y + 60);
+        ctx.fill();
+
+        // Meteors
+        ctx.fillStyle = isSlowed ? '#cc44ff' : '#ff4444'; // Purple rocks if time slowed
+        meteors.forEach(m => {
+            let mx = laneCenters[m.lane];
+            ctx.fillRect(mx - m.w/2, m.y, m.w, m.h);
+        });
+
+        // HUD Updates
+        els.hudScore.innerText = score;
+        els.hudLives.innerText = "Lives: " + player.lives;
+        
+        let buffText = "";
+        if (isInvincible) buffText += `SHIELD (${Math.ceil(invincibleTimer/60)}) `;
+        if (isSlowed) buffText += `SLOW (${Math.ceil(slowTimer/60)})`;
+        els.hudBuff.innerText = buffText;
+    }
+
+    function gameLoop() {
+        if (gameRunning) {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+    }
+
+    async function endGame() {
+        gameRunning = false;
+        els.gameOverScreen.classList.remove('hidden');
+        document.getElementById('final-score').innerText = score;
+
+        // Submit Score
+        const token = localStorage.getItem('ll_token');
+        await fetch(`https://api.lootlocker.io/game/v1/leaderboards/${LL_LEADERBOARD_KEY}/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+            body: JSON.stringify({ score: score })
+        });
+
+        // Get Leaderboard
+        const res = await fetch(`https://api.lootlocker.io/game/v1/leaderboards/${LL_LEADERBOARD_KEY}/list?count=20`, {
+            headers: { 'x-session-token': token }
+        });
+        const data = await res.json();
+        
+        els.leaderboard.innerHTML = '';
+        if(data.items) {
+            data.items.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span>#${item.rank} ${item.player.name || 'User'}</span><span>${item.score}</span>`;
+                els.leaderboard.appendChild(li);
+            });
+        }
+    }
+
+    // --- INPUTS ---
+    window.addEventListener('keydown', e => {
+        if (!gameRunning) return;
+        if (e.key === 'ArrowLeft' && player.lane > 0) player.lane--;
+        if (e.key === 'ArrowRight' && player.lane < 2) player.lane++;
+    });
+
+    els.connectBtn.addEventListener('click', async () => {
+        const user = document.getElementById('username-input').value;
+        if(!user) return alert("Enter Username");
+        
+        els.connectBtn.disabled = true;
+        els.connectBtn.innerText = "Loading...";
+        
+        const success = await initLootLocker(user);
+        if(success) {
+            els.loginSection.classList.add('hidden');
+            els.lobbySection.classList.remove('hidden');
+            els.statusMsg.innerText = "Connected as " + user;
+        } else {
+            els.connectBtn.disabled = false;
+            els.connectBtn.innerText = "CONNECT";
+        }
+    });
+
+    els.startBtn.addEventListener('click', startGame);
+    
+    els.restartBtn.addEventListener('click', () => {
+        els.gameOverScreen.classList.add('hidden');
+        els.startScreen.classList.remove('hidden');
+        // Reload storage to ensure lives are accurate if we died
+        const token = localStorage.getItem('ll_token');
+        loadPlayerStorage(token);
+    });
+
+</script>
+</body>
+</html>

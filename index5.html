@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - (ré)Pokémon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=DotGothic16&display.swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a0b2e;
+            color: #fbbfff;
+            font-family: 'DotGothic16', sans-serif;
+            padding: 2rem;
+        }
+        h1, h2 { font-family: 'Press Start 2P', sans-serif; }
+        .retro-btn {
+            font-family: 'Press Start 2P', sans-serif;
+            text-transform: uppercase;
+            box-shadow: 2px 2px 0px #000;
+            transition: all 0.1s;
+        }
+        .retro-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+        .section-box {
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body class="max-w-4xl mx-auto">
+
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-2xl text-yellow-300">Admin Control</h1>
+        <a href="index.html" class="retro-btn bg-blue-600 text-white text-xs px-4 py-2 border border-black rounded">Back to Game</a>
+    </div>
+
+    <!-- EVENT MANAGER SECTION -->
+    <div class="section-box border-yellow-500/50">
+        <h2 class="text-xl mb-4 text-yellow-300">Event Battle Manager</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <!-- OPTION 1: CLOSE -->
+            <button id="close-event-btn" class="retro-btn bg-red-800 text-white text-xs px-4 py-4 border border-black rounded text-center">
+                1. Close Event<br>(Lock Button)
+            </button>
+            
+            <!-- OPTION 2: OPEN -->
+            <button id="open-event-btn" class="retro-btn bg-green-700 text-white text-xs px-4 py-4 border border-black rounded text-center">
+                2. Open Event<br>(Allow Sign-in)
+            </button>
+            
+            <!-- OPTION 3: START -->
+            <button id="start-event-btn" class="retro-btn bg-purple-700 text-white text-xs px-4 py-4 border border-black rounded text-center">
+                3. Start Event<br>(Generate Matches)
+            </button>
+        </div>
+
+        <div class="bg-black/50 p-4 rounded text-xs font-mono mb-4">
+            <p>Current Status: <strong id="current-status" class="text-white">LOADING...</strong></p>
+            <p>Signed In Players: <strong id="participant-count" class="text-white">0</strong></p>
+        </div>
+
+        <h3 class="text-lg mb-2 text-white">Event Participants</h3>
+        <div class="max-h-40 overflow-y-auto bg-black/30 border border-gray-700 rounded p-2 mb-4" id="participant-list">
+            <p class="text-gray-500 italic">No participants yet...</p>
+        </div>
+    </div>
+
+    <!-- USER MANAGER SECTION -->
+    <div class="section-box">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl">Registered Users</h2>
+            <button id="refresh-users-btn" class="retro-btn bg-gray-600 text-white text-xs px-4 py-2 border border-black rounded">Refresh</button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="text-yellow-300 border-b-2 border-gray-500">
+                        <th class="p-3">Username</th>
+                        <th class="p-3">User ID</th>
+                        <th class="p-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="user-list">
+                    <tr><td colspan="3" class="p-4 text-center text-gray-400">Loading users...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, collection, getDocs, deleteDoc, doc, setDoc, 
+            orderBy, query, onSnapshot, serverTimestamp, writeBatch 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBu05x09GesEm9zSwrnzQbN2SV03q3xF-0",
+            authDomain: "re-fight.firebaseapp.com",
+            projectId: "re-fight",
+            storageBucket: "re-fight.firebasestorage.app",
+            messagingSenderId: "192047188516",
+            appId: "1:192047188516:web:1d10ba434ebc33359c66b1",
+            measurementId: "G-RC3WBTFK5J"
+        };
+
+        const appId = 'default-app-id';
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        // DOM Elements
+        const statusEl = document.getElementById('current-status');
+        const countEl = document.getElementById('participant-count');
+        const participantListEl = document.getElementById('participant-list');
+        const userListEl = document.getElementById('user-list');
+        
+        const closeBtn = document.getElementById('close-event-btn');
+        const openBtn = document.getElementById('open-event-btn');
+        const startBtn = document.getElementById('start-event-btn');
+        const refreshUsersBtn = document.getElementById('refresh-users-btn');
+
+        async function init() {
+            await signInAnonymously(auth);
+            
+            // Listeners
+            listenToStatus();
+            listenToParticipants();
+            fetchUsers();
+            
+            // Event Buttons
+            closeBtn.addEventListener('click', () => setEventStatus('locked'));
+            openBtn.addEventListener('click', () => setEventStatus('open'));
+            startBtn.addEventListener('click', startEvent);
+            refreshUsersBtn.addEventListener('click', fetchUsers);
+        }
+
+        // --- EVENT MANAGER LOGIC ---
+
+        function listenToStatus() {
+            onSnapshot(doc(db, `artifacts/${appId}/public/data/event_data/status`), (doc) => {
+                const data = doc.data();
+                const state = data ? data.state : 'locked';
+                statusEl.textContent = state.toUpperCase();
+                
+                // Visual feedback
+                if(state === 'locked') statusEl.className = 'text-red-500';
+                else if(state === 'open') statusEl.className = 'text-green-500';
+                else if(state === 'started') statusEl.className = 'text-purple-500';
+            });
+        }
+
+        function listenToParticipants() {
+            const q = query(collection(db, `artifacts/${appId}/public/data/event_data/participants`), orderBy('joinedAt'));
+            onSnapshot(q, (snapshot) => {
+                countEl.textContent = snapshot.size;
+                participantListEl.innerHTML = '';
+                
+                if (snapshot.empty) {
+                    participantListEl.innerHTML = '<p class="text-gray-500 italic">No participants yet...</p>';
+                    return;
+                }
+
+                snapshot.forEach(doc => {
+                    const p = doc.data();
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center text-sm text-gray-300 border-b border-gray-700 py-1';
+                    div.innerHTML = `
+                        <span>${p.username} <span class="text-gray-600 text-xs">(${p.userId.substr(0,4)})</span></span>
+                    `;
+                    participantListEl.appendChild(div);
+                });
+            });
+        }
+
+        async function setEventStatus(status) {
+            const docRef = doc(db, `artifacts/${appId}/public/data/event_data/status`);
+            try {
+                await setDoc(docRef, { state: status });
+                alert(`Event status set to: ${status}`);
+            } catch (e) {
+                console.error(e);
+                alert("Error setting status");
+            }
+        }
+
+        async function startEvent() {
+            if (!confirm("Start Event? This will pair current players into matches.")) return;
+            
+            // 1. Get Participants
+            const participantsRef = collection(db, `artifacts/${appId}/public/data/event_data/participants`);
+            const snapshot = await getDocs(participantsRef);
+            let participants = [];
+            snapshot.forEach(doc => participants.push(doc.data()));
+
+            if (participants.length < 2) {
+                alert("Not enough players to start!");
+                return;
+            }
+
+            // 2. Shuffle
+            for (let i = participants.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [participants[i], participants[j]] = [participants[j], participants[i]];
+            }
+
+            // 3. Create Matches
+            const batch = writeBatch(db);
+            const gamesCollection = collection(db, `artifacts/${appId}/public/data/games`);
+            
+            for (let i = 0; i < participants.length - 1; i += 2) {
+                const p1 = participants[i];
+                const p2 = participants[i+1];
+                
+                // Create Game Doc
+                const newGameDoc = doc(gamesCollection);
+                const gameId = newGameDoc.id;
+                
+                const gameData = {
+                    player1: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p1.username },
+                    player2: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p2.username },
+                    gameState: 'selection', // Start directly in selection since both are 'joined'
+                    log: [`Event Match! ${p1.username} vs ${p2.username}`],
+                    createdAt: serverTimestamp(),
+                    isEvent: true
+                };
+                
+                batch.set(newGameDoc, gameData);
+                
+                // Assign Matches to Players (so they know where to go)
+                const p1MatchRef = doc(db, `artifacts/${appId}/public/data/event_data/matches/${p1.userId}`);
+                const p2MatchRef = doc(db, `artifacts/${appId}/public/data/event_data/matches/${p2.userId}`);
+                
+                batch.set(p1MatchRef, { gameId: gameId, opponent: p2.username });
+                batch.set(p2MatchRef, { gameId: gameId, opponent: p1.username });
+            }
+
+            // 4. Update Status to Started
+            const statusRef = doc(db, `artifacts/${appId}/public/data/event_data/status`);
+            batch.set(statusRef, { state: 'started' });
+
+            try {
+                await batch.commit();
+                alert(`Event Started! Created ${Math.floor(participants.length/2)} matches.`);
+            } catch (e) {
+                console.error("Error starting event:", e);
+                alert("Error starting event.");
+            }
+        }
+
+
+        // --- USER MANAGER LOGIC ---
+
+        async function fetchUsers() {
+            userListEl.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">Loading...</td></tr>';
+            
+            try {
+                const usersRef = collection(db, `artifacts/${appId}/public/data/registered_users`);
+                const q = query(usersRef, orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    userListEl.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">No users found.</td></tr>';
+                    return;
+                }
+
+                userListEl.innerHTML = '';
+                querySnapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-700 hover:bg-white/5';
+                    tr.innerHTML = `
+                        <td class="p-3 font-bold text-white">${data.username || 'Unknown'}</td>
+                        <td class="p-3 text-xs font-mono text-gray-400">${docSnap.id}</td>
+                        <td class="p-3 text-right">
+                            <button class="delete-btn retro-btn bg-red-600 text-white text-[10px] px-3 py-2 border border-black rounded" data-id="${docSnap.id}">
+                                Delete
+                            </button>
+                        </td>
+                    `;
+                    userListEl.appendChild(tr);
+                });
+
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => handleDelete(e.target.dataset.id));
+                });
+
+            } catch (error) {
+                console.error(error);
+                userListEl.innerHTML = `<tr><td colspan="3" class="text-red-400 p-4">Error loading users.</td></tr>`;
+            }
+        }
+
+        async function handleDelete(docId) {
+            if (!confirm(`Delete user ID: ${docId}?`)) return;
+            try {
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/registered_users/${docId}`));
+                fetchUsers();
+            } catch (error) {
+                console.error(error);
+                alert('Failed to delete user.');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

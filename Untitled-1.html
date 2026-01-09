@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon Battle</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #d304ee; /* Changed background color */
+            /* Simple noise background for a retro feel */
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%239C92AC' fill-opacity='0.1' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+            padding-bottom: 80px; /* Added space for the fixed button */
+        }
+
+        /* --- HP Bar Styling --- */
+        .hp-bar-outer {
+            background-color: #e0e0e0;
+            border-radius: 9999px;
+            overflow: hidden;
+            border: 2px solid #333;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .hp-bar-inner {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.5s ease-in-out;
+            /* Green to Yellow to Red gradient */
+            background: linear-gradient(90deg, #dc2626, #f59e0b, #22c55e);
+            background-size: 300% 100%; /* Size to show only one part */
+            background-position: 0% 50%; /* Start at green (right side) */
+        }
+
+        /* --- Retro Button Styling --- */
+        .retro-btn {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background-color: #4a5568; /* Default gray */
+            color: white;
+            border: 2px solid #1a202c;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #1a202c; /* 3D effect */
+            transition: all 0.1s ease-in-out;
+            transform: translateY(0);
+        }
+
+        /* The user requested an orange highlight on click */
+        .retro-btn:active {
+            background-color: #dd6b20; /* Orange */
+            box-shadow: 0 2px 0 #1a202c;
+            transform: translateY(2px); /* Button press effect */
+        }
+
+        .retro-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* --- Heavy Attack Button States --- */
+        .heavy-attack-disabled {
+            background-color: #2d3748; /* Darker gray */
+            color: #718096;
+            box-shadow: 0 4px 0 #1a202c;
+            opacity: 0.6;
+            pointer-events: none; /* Not clickable */
+        }
+
+        .heavy-attack-ready {
+            background-color: #c53030; /* Ready state - red */
+            color: white;
+        }
+        .heavy-attack-ready:active {
+            background-color: #dd6b20; /* Still orange on click */
+        }
+
+        /* --- Battle Log --- */
+        .battle-log {
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 2px solid #4a5568;
+            border-radius: 8px;
+            /* height: 120px; <-- REMOVED FIXED HEIGHT */
+            overflow-y: auto;
+            color: #f0f0f0;
+            font-family: monospace;
+        }
+        .battle-log p {
+            padding: 4px 8px;
+            border-bottom: 1px dashed #4a5568;
+        }
+        .battle-log p:last-child {
+            border-bottom: none;
+        }
+
+        /* --- Screen Transitions --- */
+        .hidden {
+            display: none;
+        }
+
+        /* --- Victory Overlay --- */
+        .victory-text {
+            font-family: 'Inter', sans-serif;
+            font-weight: 900;
+            font-size: 5rem;
+            color: white;
+            text-shadow: 
+                -3px -3px 0 #000,  
+                 3px -3px 0 #000,
+                -3px  3px 0 #000,
+                 3px  3px 0 #000,
+                -4px 0 0 #ffcc00,
+                 4px 0 0 #ffcc00,
+                 0 -4px 0 #ffcc00,
+                 0 4px 0 #ffcc00; /* Pokémon-style text shadow */
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        /* --- Pokémon Sprite Animations --- */
+        .pokemon-sprite {
+            transition: transform 0.2s ease;
+            image-rendering: pixelated; /* Keeps placeholders sharp */
+        }
+        .pokemon-sprite.taking-damage {
+            animation: shake 0.3s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+        .pokemon-sprite.attacking {
+            transform: scale(1.1) translateX(10px);
+        }
+        .pokemon-sprite.ai-attacking {
+            transform: scale(1.1) translateX(-10px);
+        }
+
+        /* --- Selection Card --- */
+        .pokemon-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .pokemon-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
+
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <h1 id="main-title" class="text-3xl font-bold text-center text-white mb-6" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">Choose Your Pokémon!</h1>
+
+    <div id="game-container" class="w-full max-w-4xl bg-[#b804ee]/80 backdrop-blur-sm rounded-xl shadow-2xl p-6 border-4 border-gray-700">
+
+        <!-- ===== SELECTION SCREEN ===== -->
+        <div id="selection-screen">
+            <div id="pokemon-selection-grid" class="grid grid-cols-5 gap-2 md:gap-4">
+                <!-- Pokémon cards will be injected here by JS -->
+            </div>
+        </div>
+
+        <!-- ===== BATTLE SCREEN ===== -->
+        <div id="battle-screen" class="hidden">
+            <!-- Top Row: AI vs Player Info -->
+            <!-- ADDED RESPONSIVE GAP -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-6 mb-2 md:mb-4">
+
+                <!-- Player Pokémon Area (MOVED) -->
+                <!-- ADDED RESPONSIVE PADDING -->
+                <div class="bg-gray-200/70 p-2 md:p-4 rounded-lg border-2 border-gray-400 shadow-md">
+                    <div class="flex justify-between items-center mb-2">
+                        <!-- ADDED RESPONSIVE TEXT -->
+                        <h2 id="player-pokemon-name" class="text-lg md:text-2xl font-bold">Player Pokémon</h2>
+                        <span id="player-hp-text" class="text-sm md:text-lg font-semibold">HP: 100/100</span>
+                    </div>
+                    <div class="hp-bar-outer w-full h-5 mb-2 md:mb-4">
+                        <div id="player-hp-bar" class="hp-bar-inner h-full w-full"></div>
+                    </div>
+                    <div class="flex justify-start">
+                        <!-- ADDED RESPONSIVE IMAGE SIZE -->
+                        <img id="player-pokemon-img" src="https://placehold.co/150x150/EFEFEF/333?text=Player" alt="Player Pokémon" class="pokemon-sprite h-24 w-24 md:h-32 md:w-32 object-cover rounded">
+                    </div>
+                </div>
+
+                <!-- AI Pokémon Area (MOVED) -->
+                <!-- ADDED RESPONSIVE PADDING -->
+                <div class="bg-gray-200/70 p-2 md:p-4 rounded-lg border-2 border-gray-400 shadow-md">
+                    <div class="flex justify-between items-center mb-2">
+                        <!-- ADDED RESPONSIVE TEXT -->
+                        <h2 id="ai-pokemon-name" class="text-lg md:text-2xl font-bold">AI Pokémon</h2>
+                        <span id="ai-hp-text" class="text-sm md:text-lg font-semibold">HP: 100/100</span>
+                    </div>
+                    <div class="hp-bar-outer w-full h-5 mb-2 md:mb-4">
+                        <div id="ai-hp-bar" class="hp-bar-inner h-full w-full"></div>
+                    </div>
+                    <div class="flex justify-end">
+                        <!-- ADDED RESPONSIVE IMAGE SIZE -->
+                        <img id="ai-pokemon-img" src="https://placehold.co/150x150/EFEFEF/333?text=AI" alt="AI Pokémon" class="pokemon-sprite h-24 w-24 md:h-32 md:w-32 object-cover rounded">
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Bottom Row: Log and Controls -->
+            <!-- ADDED RESPONSIVE GAP -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-6">
+                <!-- Player Controls (MOVED) -->
+                <div>
+                    <!-- ADDED RESPONSIVE TEXT -->
+                    <h3 class="text-base md:text-xl font-semibold mb-2 text-center">Your Turn!</h3>
+                    <div id="player-controls" class="grid grid-cols-2 gap-2 md:gap-3">
+                        <!-- Attack buttons will be injected here by JS -->
+                    </div>
+                </div>
+
+                <!-- Battle Log (MOVED) -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <!-- ADDED RESPONSIVE TEXT -->
+                        <h3 class="text-base md:text-xl font-semibold">Battle Log</h3>
+                        <span id="turn-counter" class="text-sm md:text-lg font-mono font-bold">Turn: 1 / 5</span>
+                    </div>
+                    <!-- ADDED RESPONSIVE HEIGHT -->
+                    <div id="battle-log" class="battle-log p-2 rounded-lg h-28 md:h-32">
+                        <p>The battle begins!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== VICTORY SCREEN ===== -->
+        <div id="victory-screen" class="hidden text-center">
+            <div class="relative w-64 h-64 md:w-80 md:h-80 mx-auto">
+                <img id="winner-img" src="https://placehold.co/320x320/EFEFEF/333?text=Winner" alt="Winner" class="w-full h-full object-cover rounded-full shadow-lg border-4 border-yellow-400">
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <h1 id="victory-text" class="victory-text">VICTORY</h1>
+                </div>
+            </div>
+            <button id="restart-button" class="retro-btn bg-blue-600 mt-8 text-2xl px-8 py-4">Play Again</button>
+        </div>
+    </div>
+
+    <!-- END GAME BUTTON -->
+    <div class="fixed bottom-4 left-0 right-0 text-center z-50">
+        <button id="end-game-btn" class="retro-btn bg-red-700 px-8 hidden">End Game</button>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const POKEMON_DATA = [
+            {
+                id: 1,
+                name: 'Sparky',
+                image: 'https://placehold.co/150x150/FFEB3B/333?text=Sparky',
+                attacks: [
+                    { name: 'Zap', damage: 20 },
+                    { name: 'Shock', damage: 20 },
+                    { name: 'Thunder', damage: 40 },
+                    { name: 'Volt Crash', damage: 60, type: 'heavy' }
+                ]
+            },
+            {
+                id: 2,
+                name: 'Fira',
+                image: 'https://placehold.co/150x150/F44336/FFF?text=Fira',
+                attacks: [
+                    { name: 'Ember', damage: 20 },
+                    { name: 'Scratch', damage: 20 },
+                    { name: 'Flame', damage: 40 },
+                    { name: 'Inferno', damage: 60, type: 'heavy' }
+                ]
+            },
+            {
+                id: 3,
+                name: 'Aqua',
+                image: 'https://placehold.co/150x150/2196F3/FFF?text=Aqua',
+                attacks: [
+                    { name: 'Bubble', damage: 20 },
+                    { name: 'Tackle', damage: 20 },
+                    { name: 'Water Gun', damage: 40 },
+                    { name: 'Hydro Pump', damage: 60, type: 'heavy' }
+                ]
+            },
+            {
+                id: 4,
+                name: 'Leafy',
+                image: 'https://placehold.co/150x150/4CAF50/FFF?text=Leafy',
+                attacks: [
+                    { name: 'Vine Whip', damage: 20 },
+                    { name: 'Cut', damage: 20 },
+                    { name: 'Razor Leaf', damage: 40 },
+                    { name: 'Solar Beam', damage: 60, type: 'heavy' }
+                ]
+            },
+            {
+                id: 5,
+                name: 'Rocky',
+                image: 'https://placehold.co/150x150/795548/FFF?text=Rocky',
+                attacks: [
+                    { name: 'Pebble', damage: 20 },
+                    { name: 'Smash', damage: 20 },
+                    { name: 'Rock Throw', damage: 40 },
+                    { name: 'Earthquake', damage: 60, type: 'heavy' }
+                ]
+            }
+        ];
+
+        const FUNNY_MISS_MESSAGES = [
+            "but it tripped on a pebble!",
+            "but it suddenly got distracted by a butterfly!",
+            "but it sneezed and missed completely!",
+            "but the opponent's sheer style was too intimidating!",
+            "but it forgot what it was doing!",
+            "but it decided to practice its dance moves instead.",
+            "but it remembered a funny joke and paused."
+        ];
+
+        // --- GAME STATE ---
+        let playerPokemon = null;
+        let aiPokemon = null;
+        let playerHP = 100;
+        let aiHP = 100;
+        let currentTurn = 1;
+        let isPlayerTurn = true;
+        let gameInProgress = false;
+        const MAX_TURNS = 5;
+        const MISS_CHANCE = 0.2; // 20% miss chance
+
+        // --- DOM ELEMENTS ---
+        const selectionScreen = document.getElementById('selection-screen');
+        const battleScreen = document.getElementById('battle-screen');
+        const victoryScreen = document.getElementById('victory-screen');
+        const pokemonSelectionGrid = document.getElementById('pokemon-selection-grid');
+        
+        const aiPokemonName = document.getElementById('ai-pokemon-name');
+        const aiHpText = document.getElementById('ai-hp-text');
+        const aiHpBar = document.getElementById('ai-hp-bar');
+        const aiPokemonImg = document.getElementById('ai-pokemon-img');
+
+        const playerPokemonName = document.getElementById('player-pokemon-name');
+        const playerHpText = document.getElementById('player-hp-text');
+        const playerHpBar = document.getElementById('player-hp-bar');
+        const playerPokemonImg = document.getElementById('player-pokemon-img');
+        
+        const battleLog = document.getElementById('battle-log');
+        const turnCounter = document.getElementById('turn-counter');
+        const playerControls = document.getElementById('player-controls');
+        
+        const endGameButton = document.getElementById('end-game-btn');
+        
+        const winnerImg = document.getElementById('winner-img');
+        const victoryText = document.getElementById('victory-text');
+        const restartButton = document.getElementById('restart-button');
+        const mainTitle = document.getElementById('main-title');
+
+        // --- FUNCTIONS ---
+
+        /**
+         * Initializes the game, populating the selection screen.
+         */
+        function initGame() {
+            // Reset state
+            playerPokemon = null;
+            aiPokemon = null;
+            playerHP = 100;
+            aiHP = 100;
+            currentTurn = 1;
+            isPlayerTurn = true;
+            gameInProgress = false;
+
+            // Show selection screen
+            selectionScreen.classList.remove('hidden');
+            battleScreen.classList.add('hidden');
+            victoryScreen.classList.add('hidden'); 
+
+            // Show the main title
+            mainTitle.classList.remove('hidden');
+
+            // Hide end game button
+            endGameButton.classList.add('hidden');
+            
+            // Populate grid
+            populateSelectionGrid();
+
+            // Reset log
+            battleLog.innerHTML = `<p>Welcome! Choose your Pokémon to begin.</p>`;
+            updateUI();
+        }
+
+        /**
+         * Populates the Pokémon selection grid.
+         */
+        function populateSelectionGrid() {
+            pokemonSelectionGrid.innerHTML = ''; // Clear old grid
+            POKEMON_DATA.forEach(pokemon => {
+                const card = document.createElement('div');
+                // ADDED RESPONSIVE PADDING
+                card.className = 'pokemon-card bg-gray-200/70 p-2 md:p-4 rounded-lg border-2 border-gray-400 shadow-md text-center cursor-pointer';
+                card.innerHTML = `
+                    <!-- ADDED RESPONSIVE IMAGE/TEXT/BUTTON -->
+                    <img src="${pokemon.image.replace('150x150', '96x96')}" alt="${pokemon.name}" class="w-16 h-16 md:w-24 md:h-24 rounded-full mx-auto mb-1 md:mb-2 border-2 md:border-4 border-gray-500">
+                    <h3 class="text-sm md:text-xl font-bold mb-1 md:mb-2">${pokemon.name}</h3>
+                    <button class="retro-btn bg-green-600 w-full !text-xs !p-2 md:!text-base md:!p-3">Choose</button>
+                `;
+                card.addEventListener('click', () => selectPokemon(pokemon.id));
+                pokemonSelectionGrid.appendChild(card);
+            });
+        }
+
+        /**
+         * Handles the player's Pokémon selection.
+         * @param {number} pokemonId - The ID of the chosen Pokémon.
+         */
+        function selectPokemon(pokemonId) {
+            playerPokemon = POKEMON_DATA.find(p => p.id === pokemonId);
+            
+            // AI selects a different Pokémon
+            const aiChoices = POKEMON_DATA.filter(p => p.id !== pokemonId);
+            aiPokemon = aiChoices[Math.floor(Math.random() * aiChoices.length)];
+
+            startBattle();
+        }
+
+        /**
+         * Sets up and starts the battle.
+         */
+        function startBattle() {
+            gameInProgress = true;
+            selectionScreen.classList.add('hidden');
+            battleScreen.classList.remove('hidden');
+            
+            // Hide the main title
+            mainTitle.classList.add('hidden');
+
+            // Show the end game button
+            endGameButton.classList.remove('hidden');
+
+            // Setup UI
+            playerPokemonName.textContent = playerPokemon.name;
+            playerPokemonImg.src = playerPokemon.image;
+            
+            aiPokemonName.textContent = aiPokemon.name;
+            aiPokemonImg.src = aiPokemon.image;
+
+            // Setup player attack buttons
+            playerControls.innerHTML = '';
+            playerPokemon.attacks.forEach((attack, index) => {
+                const button = document.createElement('button');
+                button.textContent = attack.name;
+                // ADDED RESPONSIVE BUTTON CLASSES
+                button.className = 'retro-btn !text-xs !p-2 md:!text-base md:!p-3'; 
+                if (attack.type === 'heavy') {
+                    button.id = 'heavy-attack-btn';
+                    button.classList.add('heavy-attack-disabled'); // Start disabled
+                }
+                button.addEventListener('click', () => playerAttack(index));
+                playerControls.appendChild(button);
+            });
+
+            // Reset log
+            battleLog.innerHTML = `<p>You chose ${playerPokemon.name}!</p><p>The AI chose ${aiPokemon.name}!</p><p>Let the battle begin!</p>`;
+            
+            updateUI();
+        }
+
+        /**
+         * Handles the player's attack action.
+         * @param {number} attackIndex - The index of the attack in the Pokémon's attack array.
+         */
+        function playerAttack(attackIndex) {
+            if (!isPlayerTurn || !gameInProgress) return;
+
+            const attack = playerPokemon.attacks[attackIndex];
+
+            // Check heavy attack rule
+            if (attack.type === 'heavy' && playerHP >= 50) {
+                logMessage(`You can't use ${attack.name} with more than 50 HP!`);
+                return; // Don't waste the turn
+            }
+            
+            isPlayerTurn = false;
+            animateAttack(playerPokemonImg, true);
+            logMessage(`You commanded ${playerPokemon.name} to use ${attack.name}!`);
+
+            // Use setTimeout to create a pause for readability
+            setTimeout(() => {
+                // Check for miss
+                if (Math.random() < MISS_CHANCE) {
+                    logMessage(`...but it ${FUNNY_MISS_MESSAGES[Math.floor(Math.random() * FUNNY_MISS_MESSAGES.length)]}`);
+                } else {
+                    const damage = attack.damage;
+                    aiHP = Math.max(0, aiHP - damage);
+                    logMessage(`${attack.name} hit! It dealt ${damage} damage.`);
+                    animateDamage(aiPokemonImg);
+                }
+                updateUI();
+                
+                // Check for AI KO
+                if (checkGameOver()) return;
+                
+                // AI's turn
+                setTimeout(aiTurn, 1500);
+
+            }, 1000);
+
+            updateUI(); // Disable buttons immediately
+        }
+
+        /**
+         * Simulates the AI's turn and logic.
+         */
+        function aiTurn() {
+            if (!gameInProgress) return;
+
+            const attack = getAiAttack();
+            
+            animateAttack(aiPokemonImg, false);
+            logMessage(`The AI's ${aiPokemon.name} uses ${attack.name}!`);
+
+            // Use setTimeout for readability
+            setTimeout(() => {
+                // Check for miss
+                if (Math.random() < MISS_CHANCE) {
+                    logMessage(`...but it ${FUNNY_MISS_MESSAGES[Math.floor(Math.random() * FUNNY_MISS_MESSAGES.length)]}`);
+                } else {
+                    const damage = attack.damage;
+                    playerHP = Math.max(0, playerHP - damage);
+                    logMessage(`${attack.name} hit! It dealt ${damage} damage.`);
+                    animateDamage(playerPokemonImg);
+                }
+
+                currentTurn++; // Increment turn *after* both player and AI have gone
+                isPlayerTurn = true;
+                updateUI();
+                checkGameOver();
+            }, 1000);
+        }
+
+        /**
+         * "Smart" AI logic to select an attack.
+         * @returns {object} The chosen attack object.
+         */
+        function getAiAttack() {
+            const attacks = aiPokemon.attacks;
+            const heavyAttack = attacks.find(a => a.type === 'heavy');
+            const mediumAttack = attacks.find(a => a.damage === 40);
+            const basicAttacks = attacks.filter(a => a.damage === 20);
+
+            // Rule 1: If AI HP < 50, high chance to use Heavy Attack.
+            if (aiHP < 50 && Math.random() < 0.75) { // 75% chance
+                logMessage(`The AI's ${aiPokemon.name} is focusing its power!`);
+                return heavyAttack;
+            }
+
+            // Rule 2: If Player HP is low, try to finish.
+            if (playerHP <= 40) {
+                // Use heavy if available, otherwise medium
+                if (aiHP < 50) return heavyAttack;
+                return mediumAttack;
+            }
+            
+            // Rule 3: If Player HP is very low, use medium to be safe
+            if (playerHP <= 20) {
+                return mediumAttack;
+            }
+
+            // Rule 4: Otherwise, random choice, weighted towards medium.
+            const randomChoice = Math.random();
+            if (randomChoice < 0.4) { // 40% chance for medium
+                return mediumAttack;
+            } else if (randomChoice < 0.7) { // 30% chance for basic 1
+                return basicAttacks[0];
+            } else { // 30% chance for basic 2
+                return basicAttacks[1];
+            }
+        }
+
+        /**
+         * Checks if the game is over due to KO or turns running out.
+         * @returns {boolean} True if the game is over, false otherwise.
+         */
+        function checkGameOver() {
+            if (!gameInProgress) return true; // Game already ended
+
+            if (aiHP <= 0) {
+                logMessage(`The AI's ${aiPokemon.name} fainted!`);
+                showVictoryScreen(playerPokemon, 'VICTORY');
+                return true;
+            }
+            if (playerHP <= 0) {
+                logMessage(`Your ${playerPokemon.name} fainted!`);
+                showVictoryScreen(aiPokemon, 'DEFEAT');
+                return true;
+            }
+
+            if (currentTurn > MAX_TURNS) {
+                logMessage("The battle is over! Time's up!");
+                if (playerHP > aiHP) {
+                    logMessage("You have more HP! You win!");
+                    showVictoryScreen(playerPokemon, 'VICTORY');
+                } else if (aiHP > playerHP) {
+                    logMessage("The AI has more HP! You lose.");
+                    showVictoryScreen(aiPokemon, 'DEFEAT');
+                } else {
+                    logMessage("It's a draw!");
+                    showVictoryScreen(null, "IT'S A DRAW!");
+                }
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Updates all dynamic UI elements (HP bars, text, buttons).
+         */
+        function updateUI() {
+            // Update HP
+            playerHpText.textContent = `HP: ${playerHP}/100`;
+            aiHpText.textContent = `HP: ${aiHP}/100`;
+            
+            // Update HP bar color and width
+            updateHpBar(playerHpBar, playerHP);
+            updateHpBar(aiHpBar, aiHP);
+
+            // Update Turn Counter
+            turnCounter.textContent = `Turn: ${Math.min(currentTurn, MAX_TURNS)} / ${MAX_TURNS}`;
+
+            // Update Attack Buttons
+            const heavyBtn = document.getElementById('heavy-attack-btn');
+            if (heavyBtn) {
+                if (playerHP < 50) {
+                    heavyBtn.classList.remove('heavy-attack-disabled');
+                    heavyBtn.classList.add('heavy-attack-ready');
+                    heavyBtn.disabled = false;
+                } else {
+                    heavyBtn.classList.add('heavy-attack-disabled');
+                    heavyBtn.classList.remove('heavy-attack-ready');
+                    heavyBtn.disabled = true; // Also set disabled property
+                }
+            }
+
+            // Disable all buttons if not player's turn or game is over
+            playerControls.querySelectorAll('button').forEach(btn => {
+                if (btn.id !== 'heavy-attack-btn') { // Don't override heavy logic
+                    btn.disabled = !isPlayerTurn || !gameInProgress;
+                }
+                if (btn.id === 'heavy-attack-btn' && playerHP >= 50) {
+                    btn.disabled = true; // Ensure heavy stays disabled
+                }
+                if (!isPlayerTurn || !gameInProgress) {
+                    btn.disabled = true; // Master disable
+                }
+            });
+        }
+
+        /**
+         * Updates an HP bar's width and color based on percentage.
+         * @param {HTMLElement} barElement - The .hp-bar-inner element.
+         * @param {number} currentHp - The current HP value (0-100).
+         */
+        function updateHpBar(barElement, currentHp) {
+            const hpPercent = currentHp / 100;
+            barElement.style.width = `${currentHp}%`;
+            
+            // Update gradient position
+            // 100% HP = 0% position (all green)
+            // 50% HP = 50% position (all yellow)
+            // 0% HP = 100% position (all red)
+            const backgroundPosition = 100 - (hpPercent * 100);
+            barElement.style.backgroundPosition = `${backgroundPosition}% 50%`;
+        }
+
+
+        /**
+         * Displays the victory screen.
+         * @param {object | null} winner - The winning Pokémon object, or null for a draw.
+         * @param {string} message - The text to display (VICTORY, DEFEAT, IT'S A DRAW!).
+         */
+        function showVictoryScreen(winner, message) {
+            gameInProgress = false;
+            
+            // Hide the end game button
+            endGameButton.classList.add('hidden');
+            
+            if (winner) {
+                winnerImg.src = winner.image.replace('150x150', '320x320'); // Get larger image
+            } else {
+                winnerImg.src = 'https://placehold.co/320x320/EFEFEF/333?text=DRAW';
+            }
+            victoryText.textContent = message;
+
+            // Animate transition
+            setTimeout(() => {
+                battleScreen.classList.add('hidden');
+                victoryScreen.classList.remove('hidden');
+
+                // Hide the main title on victory
+                mainTitle.classList.add('hidden');
+            }, 1000); // Wait 1 sec after final message
+        }
+
+        /**
+         * Adds a message to the battle log and scrolls down.
+         * @param {string} message - The text to log.
+         */
+        function logMessage(message) {
+            const p = document.createElement('p');
+            p.textContent = message;
+            battleLog.appendChild(p);
+            battleLog.scrollTop = battleLog.scrollHeight; // Auto-scroll
+        }
+
+        /**
+         * Handles manually ending the game (forfeit).
+         */
+        function endGame() {
+            if (!gameInProgress) return; // Don't do anything if battle isn't running
+
+            gameInProgress = false;
+            logMessage("You forfeited the match!");
+            
+            // Show AI as winner
+            setTimeout(() => {
+                showVictoryScreen(aiPokemon, 'DEFEAT');
+            }, 500); // Short delay for the message to be read
+            updateUI(); // Disable all buttons
+        }
+
+        /**
+         * Triggers a visual "damage" animation.
+         * @param {HTMLElement} imgElement - The <img> element to animate.
+         */
+        function animateDamage(imgElement) {
+            imgElement.classList.add('taking-damage');
+            setTimeout(() => {
+                imgElement.classList.remove('taking-damage');
+            }, 300); // Duration of animation
+        }
+
+        /**
+         * Triggers a visual "attack" animation.
+         * @param {HTMLElement} imgElement - The <img> element to animate.
+         * @param {boolean} isPlayer - True if player, false if AI (for direction).
+         */
+        function animateAttack(imgElement, isPlayer) {
+            const attackClass = isPlayer ? 'attacking' : 'ai-attacking';
+            imgElement.classList.add(attackClass);
+            setTimeout(() => {
+                imgElement.classList.remove(attackClass);
+            }, 200); // Duration of animation
+        }
+
+
+        // --- EVENT LISTENERS ---
+        restartButton.addEventListener('click', initGame);
+
+        endGameButton.addEventListener('click', endGame);
+
+        // --- START GAME ---
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
