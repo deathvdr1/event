@@ -31,9 +31,16 @@
             padding: 1.5rem;
             margin-bottom: 2rem;
         }
+        input {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid #fbbfff;
+            color: white;
+            padding: 0.5rem;
+            font-family: monospace;
+        }
     </style>
 </head>
-<body class="max-w-4xl mx-auto">
+<body class="max-w-6xl mx-auto">
 
     <!-- CONNECTION STATUS BAR -->
     <div id="connection-status" class="bg-blue-900 text-white text-xs p-2 mb-4 rounded border border-blue-500 flex justify-between">
@@ -46,68 +53,73 @@
         <a href="index.html" class="retro-btn bg-blue-600 text-white text-xs px-4 py-2 border border-black rounded">Back to Game</a>
     </div>
 
-    <!-- EVENT MANAGER SECTION -->
-    <div class="section-box border-yellow-500/50">
-        <h2 class="text-xl mb-4 text-yellow-300">Event Battle Manager</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <!-- OPTION 1: CLOSE -->
-            <button id="close-event-btn" class="retro-btn bg-red-800 text-white text-xs px-4 py-4 border border-black rounded text-center">
-                1. Close Event<br>(Lock Button)
-            </button>
-            
-            <!-- OPTION 2: OPEN -->
-            <button id="open-event-btn" class="retro-btn bg-green-700 text-white text-xs px-4 py-4 border border-black rounded text-center">
-                2. Open Event<br>(Allow Sign-in)
-            </button>
-            
-            <!-- OPTION 3: START -->
-            <button id="start-event-btn" class="retro-btn bg-purple-700 text-white text-xs px-4 py-4 border border-black rounded text-center">
-                3. Start Event<br>(Generate Matches)
-            </button>
-        </div>
-
-        <!-- Auto-Match Toggle -->
-        <div class="mb-4 bg-gray-900 p-4 rounded border border-purple-500">
-            <h3 class="text-white mb-2">Automated Tournament</h3>
-            <div class="flex items-center gap-4">
-                <button id="toggle-auto-match" class="retro-btn bg-gray-600 text-white text-xs px-4 py-2 rounded">
-                    Enable Auto-Matching
-                </button>
-                <span id="auto-status" class="text-red-400 text-xs">OFF (Must keep this tab open)</span>
+        <!-- COLUMN 1: EVENT CONTROLS -->
+        <div>
+            <div class="section-box border-yellow-500/50">
+                <h2 class="text-xl mb-4 text-yellow-300">1. Event Status</h2>
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <button id="set-locked" class="retro-btn bg-red-800 text-white text-[10px] p-2 rounded text-center">Event Locked</button>
+                    <button id="set-signin" class="retro-btn bg-blue-800 text-white text-[10px] p-2 rounded text-center">Event Sign In</button>
+                    <button id="set-active" class="retro-btn bg-green-800 text-white text-[10px] p-2 rounded text-center">Event Match Make</button>
+                </div>
+                <p>Current Status: <strong id="current-status-display" class="text-white">LOADING...</strong></p>
             </div>
-            <p class="text-gray-400 text-[10px] mt-2">Automatically pairs winners as they wait.</p>
+
+            <div class="section-box border-blue-500/50">
+                <div class="flex justify-between items-center mb-4">
+                     <h2 class="text-xl text-blue-300">2. Participants</h2>
+                     <button id="refresh-participants" class="text-xs bg-gray-700 px-2 py-1 rounded">Refresh</button>
+                </div>
+               
+                <div id="participants-list" class="h-64 overflow-y-auto bg-black/40 border border-gray-600 p-2 rounded text-sm font-mono space-y-1">
+                    <!-- Participant list -->
+                    <p class="text-gray-500">No participants.</p>
+                </div>
+                <div class="mt-2 text-right">
+                    <button id="clear-participants" class="text-xs text-red-400 underline">Clear All Participants</button>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-black/50 p-4 rounded text-xs font-mono mb-4">
-            <p>Current Status: <strong id="current-status" class="text-white">LOADING...</strong></p>
-            <p>Signed In Players: <strong id="participant-count" class="text-white">0</strong></p>
-        </div>
+        <!-- COLUMN 2: MATCHMAKING -->
+        <div>
+            <div class="section-box border-green-500/50">
+                <h2 class="text-xl mb-4 text-green-300">3. Match Making</h2>
+                
+                <div class="flex justify-between items-center mb-4 bg-gray-800 p-2 rounded">
+                    <span class="text-sm">Active Round Label:</span>
+                    <input type="text" id="round-name-input" placeholder="e.g. Round 1" class="w-32 text-center" value="Round 1">
+                </div>
 
-        <h3 class="text-lg mb-2 text-white">Event Participants</h3>
-        <div class="max-h-40 overflow-y-auto bg-black/30 border border-gray-700 rounded p-2 mb-4" id="participant-list">
-            <p class="text-gray-500 italic">No participants yet...</p>
-        </div>
-    </div>
+                <!-- Manual Match Entry -->
+                <div class="bg-black/40 p-4 rounded border border-gray-600 mb-4">
+                    <h3 class="text-sm text-gray-400 mb-2">Create Match</h3>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <input type="text" id="p1-input" placeholder="Player 1 Username">
+                        <input type="text" id="p2-input" placeholder="Player 2 Username">
+                    </div>
+                    <button id="stage-match-btn" class="retro-btn bg-purple-700 text-white text-xs w-full py-2 rounded">
+                        Add to List
+                    </button>
+                </div>
 
-    <!-- EVENT WINNERS SECTION -->
-    <div class="section-box border-green-500/50">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl text-green-300">Event Winners</h2>
-            <button id="refresh-winners-btn" class="retro-btn bg-green-900 text-white text-xs px-4 py-2 border border-black rounded">Refresh</button>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left">
-                <thead>
-                    <tr class="text-green-300 border-b-2 border-gray-500">
-                        <th class="p-3">Champion</th>
-                        <th class="p-3">Time</th>
-                    </tr>
-                </thead>
-                <tbody id="winner-list">
-                    <tr><td colspan="2" class="p-4 text-center text-gray-400">No winners yet.</td></tr>
-                </tbody>
-            </table>
+                <!-- Staged Matches List -->
+                <h3 class="text-sm text-yellow-200 mb-2">Matches to Publish:</h3>
+                <div id="staged-matches-list" class="min-h-[100px] bg-black/40 border border-gray-600 p-2 rounded mb-4 space-y-2">
+                    <p class="text-gray-500 italic text-xs">No matches staged yet.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="publish-round-btn" class="retro-btn bg-green-600 text-white text-xs py-3 rounded">
+                        PUBLISH ROUND
+                    </button>
+                    <button id="close-round-btn" class="retro-btn bg-red-900 text-white text-xs py-3 rounded">
+                        CLOSE ROUND
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -117,19 +129,16 @@
             <h2 class="text-xl">Registered Users</h2>
             <button id="refresh-users-btn" class="retro-btn bg-gray-600 text-white text-xs px-4 py-2 border border-black rounded">Refresh</button>
         </div>
-
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto max-h-60 overflow-y-auto">
             <table class="w-full text-left">
                 <thead>
                     <tr class="text-yellow-300 border-b-2 border-gray-500">
                         <th class="p-3">Username</th>
-                        <th class="p-3">User ID</th>
-                        <th class="p-3 text-right">Actions</th>
+                        <th class="p-3">ID</th>
+                        <th class="p-3 text-right">Action</th>
                     </tr>
                 </thead>
-                <tbody id="user-list">
-                    <tr><td colspan="3" class="p-4 text-center text-gray-400">Loading users...</td></tr>
-                </tbody>
+                <tbody id="user-list"></tbody>
             </table>
         </div>
     </div>
@@ -152,13 +161,7 @@
             appId: "1:192047188516:web:1d10ba434ebc33359c66b1",
             measurementId: "G-RC3WBTFK5J"
         };
-
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        // UPDATE STATUS UI
-        const statusDiv = document.getElementById('connection-status');
-        const appIdDisplay = document.getElementById('app-id-display');
-        appIdDisplay.textContent = `App ID: ${appId}`;
 
         // INIT FIREBASE
         const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
@@ -166,344 +169,208 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
         
-        // DOM Elements
-        const currentStatusEl = document.getElementById('current-status');
-        const countEl = document.getElementById('participant-count');
-        const participantListEl = document.getElementById('participant-list');
+        // DOM ELEMENTS
+        const statusDisplay = document.getElementById('current-status-display');
+        const participantsListEl = document.getElementById('participants-list');
+        const stagedMatchesEl = document.getElementById('staged-matches-list');
         const userListEl = document.getElementById('user-list');
-        const winnerListEl = document.getElementById('winner-list');
-        
-        const closeBtn = document.getElementById('close-event-btn');
-        const openBtn = document.getElementById('open-event-btn');
-        const startBtn = document.getElementById('start-event-btn');
-        const refreshUsersBtn = document.getElementById('refresh-users-btn');
-        const refreshWinnersBtn = document.getElementById('refresh-winners-btn');
-        
-        const autoMatchBtn = document.getElementById('toggle-auto-match');
-        const autoStatusEl = document.getElementById('auto-status');
-        
-        let autoMatchEnabled = false;
-        let autoMatchInterval = null;
+
+        let stagedMatches = [];
 
         async function init() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                statusDiv.firstElementChild.textContent = "✅ Connected to Database";
-                statusDiv.classList.remove('bg-blue-900', 'border-blue-500');
-                statusDiv.classList.add('bg-green-900', 'border-green-500');
-                
-                // Listeners
-                listenToStatus();
-                listenToParticipants();
-                fetchUsers();
-                fetchWinners();
-                
-                // Event Buttons
-                closeBtn.addEventListener('click', () => setEventStatus('locked'));
-                openBtn.addEventListener('click', () => setEventStatus('open'));
-                startBtn.addEventListener('click', startEvent);
-                refreshUsersBtn.addEventListener('click', fetchUsers);
-                refreshWinnersBtn.addEventListener('click', fetchWinners);
-                autoMatchBtn.addEventListener('click', toggleAutoMatch);
-                
-            } catch (e) {
-                console.error("Auth failed", e);
-                statusDiv.firstElementChild.textContent = "❌ Connection Failed: " + e.message;
-                statusDiv.classList.remove('bg-blue-900', 'border-blue-500');
-                statusDiv.classList.add('bg-red-900', 'border-red-500');
-            }
-        }
-
-        // --- EVENT MANAGER LOGIC ---
-
-        function toggleAutoMatch() {
-            autoMatchEnabled = !autoMatchEnabled;
-            if (autoMatchEnabled) {
-                autoMatchBtn.textContent = "Disable Auto-Matching";
-                autoMatchBtn.classList.remove('bg-gray-600');
-                autoMatchBtn.classList.add('bg-purple-600');
-                autoStatusEl.textContent = "ON (Scanning...)";
-                autoStatusEl.className = "text-green-400 text-xs animate-pulse";
-                // Scan every 5 seconds
-                autoMatchInterval = setInterval(performAutoMatch, 5000);
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
             } else {
-                autoMatchBtn.textContent = "Enable Auto-Matching";
-                autoMatchBtn.classList.add('bg-gray-600');
-                autoMatchBtn.classList.remove('bg-purple-600');
-                autoStatusEl.textContent = "OFF";
-                autoStatusEl.className = "text-red-400 text-xs";
-                clearInterval(autoMatchInterval);
+                await signInAnonymously(auth);
             }
+            document.getElementById('connection-status').firstElementChild.textContent = "✅ Connected";
+
+            // Listeners
+            listenToStatus();
+            listenToParticipants();
+            fetchUsers();
+
+            // Button Bindings
+            document.getElementById('set-locked').onclick = () => setStatus('locked');
+            document.getElementById('set-signin').onclick = () => setStatus('signin');
+            document.getElementById('set-active').onclick = () => setStatus('active');
+            
+            document.getElementById('refresh-participants').onclick = listenToParticipants; // It's a listener but we can re-trigger if needed
+            document.getElementById('clear-participants').onclick = clearParticipants;
+            
+            document.getElementById('stage-match-btn').onclick = stageMatch;
+            document.getElementById('publish-round-btn').onclick = publishRound;
+            document.getElementById('close-round-btn').onclick = closeRound;
+            document.getElementById('refresh-users-btn').onclick = fetchUsers;
         }
 
-        async function performAutoMatch() {
-            console.log("Auto-matching scan...");
-            // Corrected Path: event_participants
-            const participantsRef = collection(db, `artifacts/${appId}/public/data/event_participants`);
-            const q = query(participantsRef, where('status', '==', 'waiting'), limit(2)); // Limit to 2 to prevent race conditions
-            const snapshot = await getDocs(q);
-            
-            if (snapshot.size < 2) return;
-
-            const waitingPlayers = [];
-            snapshot.forEach(doc => waitingPlayers.push(doc.data()));
-
-            if (waitingPlayers.length >= 2) {
-                const p1 = waitingPlayers[0];
-                const p2 = waitingPlayers[1];
-                
-                console.log(`Auto-matching ${p1.username} vs ${p2.username}`);
-                
-                const batch = writeBatch(db);
-                const gamesCollection = collection(db, `artifacts/${appId}/public/data/games`);
-                const newGameDoc = doc(gamesCollection);
-                const gameId = newGameDoc.id;
-
-                const gameData = {
-                    player1: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p1.username },
-                    player2: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p2.username },
-                    gameState: 'selection',
-                    log: [`Tournament Match! ${p1.username} vs ${p2.username}`],
-                    createdAt: serverTimestamp(),
-                    isEvent: true
-                };
-                
-                batch.set(newGameDoc, gameData);
-                
-                // Update match pointers
-                batch.set(doc(db, `artifacts/${appId}/public/data/event_matches/${p1.userId}`), { gameId: gameId, opponent: p2.username });
-                batch.set(doc(db, `artifacts/${appId}/public/data/event_matches/${p2.userId}`), { gameId: gameId, opponent: p1.username });
-                
-                // Update status to battling
-                batch.update(doc(db, `artifacts/${appId}/public/data/event_participants/${p1.userId}`), { status: 'battling' });
-                batch.update(doc(db, `artifacts/${appId}/public/data/event_participants/${p2.userId}`), { status: 'battling' });
-
-                await batch.commit();
-            }
+        // --- 1. STATUS CONTROL ---
+        async function setStatus(state) {
+            await setDoc(doc(db, `artifacts/${appId}/public/data/event_config/status`), { state });
         }
 
         function listenToStatus() {
-            onSnapshot(doc(db, `artifacts/${appId}/public/data/event_config/status`), (doc) => {
-                const data = doc.data();
-                const state = data ? data.state : 'locked';
-                currentStatusEl.textContent = state.toUpperCase();
+            onSnapshot(doc(db, `artifacts/${appId}/public/data/event_config/status`), (snap) => {
+                const s = snap.data()?.state || 'locked';
+                statusDisplay.textContent = s.toUpperCase();
                 
-                if(state === 'locked') currentStatusEl.className = 'text-red-500 font-bold';
-                else if(state === 'open') currentStatusEl.className = 'text-green-500 font-bold';
-                else if(state === 'started') currentStatusEl.className = 'text-purple-500 font-bold';
+                statusDisplay.className = 
+                    s === 'locked' ? 'text-red-500 font-bold' : 
+                    s === 'signin' ? 'text-blue-400 font-bold' : 
+                    'text-green-400 font-bold';
             });
         }
 
+        // --- 2. PARTICIPANTS ---
         function listenToParticipants() {
             const q = query(collection(db, `artifacts/${appId}/public/data/event_participants`), orderBy('joinedAt'));
-            onSnapshot(q, (snapshot) => {
-                countEl.textContent = snapshot.size;
-                participantListEl.innerHTML = '';
-                
-                if (snapshot.empty) {
-                    participantListEl.innerHTML = '<p class="text-gray-500 italic">No participants yet...</p>';
+            onSnapshot(q, (snap) => {
+                participantsListEl.innerHTML = '';
+                if(snap.empty) {
+                    participantsListEl.innerHTML = '<p class="text-gray-500">No participants.</p>';
                     return;
                 }
-
-                snapshot.forEach(doc => {
-                    const p = doc.data();
-                    let statusColor = 'text-gray-300';
-                    if (p.status === 'waiting') statusColor = 'text-green-400';
-                    if (p.status === 'battling') statusColor = 'text-yellow-400';
-
+                snap.forEach(d => {
+                    const p = d.data();
                     const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center text-sm border-b border-gray-700 py-1';
-                    div.innerHTML = `
-                        <span class="${statusColor}">${p.username} <span class="text-gray-600 text-xs">(${p.userId.substr(0,4)})</span></span>
-                        <span class="text-[10px] uppercase">${p.status || 'joined'}</span>
-                    `;
-                    participantListEl.appendChild(div);
+                    div.className = "flex justify-between border-b border-gray-700 pb-1 cursor-pointer hover:bg-white/10";
+                    div.innerHTML = `<span class="text-white">${p.username}</span> <span class="text-gray-500 text-xs">${d.id.substr(0,4)}</span>`;
+                    // Click to copy to input
+                    div.onclick = () => {
+                        const p1Input = document.getElementById('p1-input');
+                        const p2Input = document.getElementById('p2-input');
+                        if (!p1Input.value) p1Input.value = p.username;
+                        else if (!p2Input.value) p2Input.value = p.username;
+                    };
+                    participantsListEl.appendChild(div);
                 });
-                
-                // Simple Winner Detection (Visual Only)
-                if (autoMatchEnabled && snapshot.size === 1) {
-                     const winner = snapshot.docs[0].data();
-                     // Only check if they are "waiting" (won last match)
-                     if (winner.status === 'waiting') {
-                         participantListEl.innerHTML += `<div class="text-center text-yellow-300 font-bold mt-2">🏆 POTENTIAL WINNER: ${winner.username} 🏆</div>`;
-                         saveWinner(winner.username);
-                     }
-                }
+            });
+        }
+
+        async function clearParticipants() {
+            if(!confirm("Clear all participants?")) return;
+            const q = query(collection(db, `artifacts/${appId}/public/data/event_participants`));
+            const snap = await getDocs(q);
+            const batch = writeBatch(db);
+            snap.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+        }
+
+        // --- 3. MATCHMAKING ---
+        function stageMatch() {
+            const p1 = document.getElementById('p1-input').value.trim();
+            const p2 = document.getElementById('p2-input').value.trim();
+            if(!p1 || !p2) return alert("Enter both usernames");
+            
+            stagedMatches.push({ p1, p2 });
+            document.getElementById('p1-input').value = '';
+            document.getElementById('p2-input').value = '';
+            renderStagedMatches();
+        }
+
+        function renderStagedMatches() {
+            stagedMatchesEl.innerHTML = '';
+            if(stagedMatches.length === 0) {
+                stagedMatchesEl.innerHTML = '<p class="text-gray-500 italic text-xs">No matches staged yet.</p>';
+                return;
+            }
+            stagedMatches.forEach((m, i) => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center bg-gray-800 p-2 rounded text-xs";
+                div.innerHTML = `
+                    <span class="text-yellow-200">${m.p1}</span>
+                    <span class="text-gray-400">vs</span>
+                    <span class="text-blue-200">${m.p2}</span>
+                    <button class="text-red-400 ml-2" onclick="removeStaged(${i})">x</button>
+                `;
+                stagedMatchesEl.appendChild(div);
             });
         }
         
-        async function saveWinner(username) {
-             const winnersRef = collection(db, `artifacts/${appId}/public/data/event_winners`);
-             // Avoid duplicates by using username as ID for daily tracking, or random ID
-             // Simple: add with timestamp
-             // To avoid spamming, we check if this user won in the last minute.
-             const q = query(winnersRef, where("username", "==", username), orderBy("wonAt", "desc"), limit(1));
-             const snaps = await getDocs(q);
-             if (!snaps.empty) {
-                 const lastWin = snaps.docs[0].data().wonAt;
-                 if (Date.now() - lastWin.toMillis() < 60000) return; // Prevent spamming within 1 min
-             }
+        // Expose removeStaged to window for inline onclick
+        window.removeStaged = (index) => {
+            stagedMatches.splice(index, 1);
+            renderStagedMatches();
+        };
 
-             await setDoc(doc(winnersRef), {
-                 username: username,
-                 wonAt: serverTimestamp()
-             });
-             fetchWinners();
-        }
+        async function publishRound() {
+            if(stagedMatches.length === 0) return alert("No matches to publish");
+            if(!confirm("Publish this round to all players?")) return;
 
-        async function setEventStatus(status) {
-            const docRef = doc(db, `artifacts/${appId}/public/data/event_config/status`);
-            try {
-                await setDoc(docRef, { state: status });
-            } catch (e) {
-                console.error(e);
-                alert("Error setting status: " + e.message);
-            }
-        }
-
-        async function startEvent() {
-            if (!confirm("Start Event? This will pair current players into matches.")) return;
-            
-            const participantsRef = collection(db, `artifacts/${appId}/public/data/event_participants`);
-            const snapshot = await getDocs(participantsRef);
-            let participants = [];
-            snapshot.forEach(doc => participants.push(doc.data()));
-
-            if (participants.length < 2) {
-                alert("Not enough players to start! Need at least 2.");
-                return;
-            }
-
-            // Shuffle
-            for (let i = participants.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [participants[i], participants[j]] = [participants[j], participants[i]];
-            }
-
+            const roundName = document.getElementById('round-name-input').value;
             const batch = writeBatch(db);
-            const gamesCollection = collection(db, `artifacts/${appId}/public/data/games`);
+            const gamesCol = collection(db, `artifacts/${appId}/public/data/games`);
             
-            // Initial Pairing
-            for (let i = 0; i < participants.length - 1; i += 2) {
-                const p1 = participants[i];
-                const p2 = participants[i+1];
+            const publishedMatches = [];
+
+            for (const m of stagedMatches) {
+                // Create game doc
+                const gameDoc = doc(gamesCol);
+                const gameId = gameDoc.id;
                 
-                const newGameDoc = doc(gamesCollection);
-                const gameId = newGameDoc.id;
-                
-                const gameData = {
-                    player1: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p1.username },
-                    player2: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: p2.username },
+                // Create Game
+                batch.set(gameDoc, {
+                    player1: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: m.p1 },
+                    player2: { hp: 100, pokemon: null, pokemonId: null, ready: false, username: m.p2 },
                     gameState: 'selection',
-                    log: [`Event Match! ${p1.username} vs ${p2.username}`],
+                    log: [`Event Match: ${m.p1} vs ${m.p2}`],
                     createdAt: serverTimestamp(),
                     isEvent: true
-                };
-                
-                batch.set(newGameDoc, gameData);
-                
-                batch.set(doc(db, `artifacts/${appId}/public/data/event_matches/${p1.userId}`), { gameId: gameId, opponent: p2.username });
-                batch.set(doc(db, `artifacts/${appId}/public/data/event_matches/${p2.userId}`), { gameId: gameId, opponent: p1.username });
-                
-                batch.update(doc(db, `artifacts/${appId}/public/data/event_participants/${p1.userId}`), { status: 'battling' });
-                batch.update(doc(db, `artifacts/${appId}/public/data/event_participants/${p2.userId}`), { status: 'battling' });
-            }
-
-            const statusRef = doc(db, `artifacts/${appId}/public/data/event_config/status`);
-            batch.set(statusRef, { state: 'started' });
-
-            try {
-                await batch.commit();
-                alert(`Event Started! Created ${Math.floor(participants.length/2)} matches.`);
-            } catch (e) {
-                console.error("Error starting event:", e);
-                alert("Error starting event.");
-            }
-        }
-
-        async function fetchWinners() {
-            winnerListEl.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400">Loading...</td></tr>';
-            try {
-                const winnersRef = collection(db, `artifacts/${appId}/public/data/event_winners`);
-                const q = query(winnersRef, orderBy('wonAt', 'desc'), limit(10));
-                const snapshot = await getDocs(q);
-                
-                if (snapshot.empty) {
-                    winnerListEl.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400">No winners yet.</td></tr>';
-                    return;
-                }
-                
-                winnerListEl.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const date = data.wonAt ? new Date(data.wonAt.seconds * 1000).toLocaleTimeString() : '?';
-                    const tr = document.createElement('tr');
-                    tr.className = 'border-b border-gray-700';
-                    tr.innerHTML = `
-                        <td class="p-3 text-yellow-300 font-bold">🏆 ${data.username}</td>
-                        <td class="p-3 text-gray-400 text-xs">${date}</td>
-                    `;
-                    winnerListEl.appendChild(tr);
                 });
-            } catch (e) {
-                console.error(e);
+
+                // Add to list for public display
+                publishedMatches.push({
+                    p1: m.p1,
+                    p2: m.p2,
+                    gameId: gameId,
+                    winner: null
+                });
             }
+
+            // Update Active Round Doc
+            const roundDoc = doc(db, `artifacts/${appId}/public/data/event_data/active_round`);
+            batch.set(roundDoc, {
+                roundName: roundName,
+                matches: publishedMatches,
+                updatedAt: serverTimestamp()
+            });
+
+            await batch.commit();
+            
+            stagedMatches = [];
+            renderStagedMatches();
+            alert("Round Published!");
         }
 
+        async function closeRound() {
+            if(!confirm("Close current round? This clears the bracket view.")) return;
+            await deleteDoc(doc(db, `artifacts/${appId}/public/data/event_data/active_round`));
+            alert("Round Closed.");
+        }
+
+        // --- USER MGMT ---
         async function fetchUsers() {
-            userListEl.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">Loading...</td></tr>';
-            try {
-                const usersRef = collection(db, `artifacts/${appId}/public/data/registered_users`);
-                const q = query(usersRef, orderBy('createdAt', 'desc'));
-                const querySnapshot = await getDocs(q);
-                
-                if (querySnapshot.empty) {
-                    userListEl.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">No users found.</td></tr>';
-                    return;
-                }
-
-                userListEl.innerHTML = '';
-                querySnapshot.forEach((docSnap) => {
-                    const data = docSnap.data();
-                    const tr = document.createElement('tr');
-                    tr.className = 'border-b border-gray-700 hover:bg-white/5';
-                    tr.innerHTML = `
-                        <td class="p-3 font-bold text-white">${data.username || 'Unknown'}</td>
-                        <td class="p-3 text-xs font-mono text-gray-400">${docSnap.id}</td>
-                        <td class="p-3 text-right">
-                            <button class="delete-btn retro-btn bg-red-600 text-white text-[10px] px-3 py-2 border border-black rounded" data-id="${docSnap.id}">
-                                Delete
-                            </button>
-                        </td>
-                    `;
-                    userListEl.appendChild(tr);
-                });
-
-                document.querySelectorAll('.delete-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => handleDelete(e.target.dataset.id));
-                });
-
-            } catch (error) {
-                console.error(error);
-                userListEl.innerHTML = `<tr><td colspan="3" class="text-red-400 p-4">Error loading users: ${error.message}</td></tr>`;
-            }
+             userListEl.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+             const q = query(collection(db, `artifacts/${appId}/public/data/registered_users`), orderBy('createdAt', 'desc'));
+             const snap = await getDocs(q);
+             userListEl.innerHTML = '';
+             snap.forEach(d => {
+                 const u = d.data();
+                 const tr = document.createElement('tr');
+                 tr.innerHTML = `
+                    <td class="p-2">${u.username}</td>
+                    <td class="p-2 text-xs text-gray-500">${d.id}</td>
+                    <td class="p-2 text-right"><button class="text-red-500 text-xs" onclick="delUser('${d.id}')">Del</button></td>
+                 `;
+                 userListEl.appendChild(tr);
+             });
         }
-
-        async function handleDelete(docId) {
-            if (!confirm(`Delete user ID: ${docId}?`)) return;
-            try {
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/registered_users/${docId}`));
+        window.delUser = async (id) => {
+            if(confirm('Delete user?')) {
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/registered_users/${id}`));
                 fetchUsers();
-            } catch (error) {
-                console.error(error);
-                alert('Failed to delete user.');
             }
-        }
+        };
 
         init();
     </script>
