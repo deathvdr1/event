@@ -127,13 +127,17 @@
     <div class="section-box">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl">Registered Users</h2>
-            <button id="refresh-users-btn" class="retro-btn bg-gray-600 text-white text-xs px-4 py-2 border border-black rounded">Refresh</button>
+            <div class="flex gap-2">
+                <button id="reset-leaderboard-btn" class="retro-btn bg-red-600 text-white text-xs px-3 py-2 border border-black rounded">Reset Leaderboard</button>
+                <button id="refresh-users-btn" class="retro-btn bg-gray-600 text-white text-xs px-4 py-2 border border-black rounded">Refresh</button>
+            </div>
         </div>
         <div class="overflow-x-auto max-h-60 overflow-y-auto">
             <table class="w-full text-left">
                 <thead>
                     <tr class="text-yellow-300 border-b-2 border-gray-500">
                         <th class="p-3">Username</th>
+                        <th class="p-3">Score</th>
                         <th class="p-3">ID</th>
                         <th class="p-3 text-right">Action</th>
                     </tr>
@@ -195,13 +199,15 @@
             document.getElementById('set-signin').onclick = () => setStatus('signin');
             document.getElementById('set-active').onclick = () => setStatus('active');
             
-            document.getElementById('refresh-participants').onclick = listenToParticipants; // It's a listener but we can re-trigger if needed
+            document.getElementById('refresh-participants').onclick = listenToParticipants;
             document.getElementById('clear-participants').onclick = clearParticipants;
             
             document.getElementById('stage-match-btn').onclick = stageMatch;
             document.getElementById('publish-round-btn').onclick = publishRound;
             document.getElementById('close-round-btn').onclick = closeRound;
+            
             document.getElementById('refresh-users-btn').onclick = fetchUsers;
+            document.getElementById('reset-leaderboard-btn').onclick = resetLeaderboard;
         }
 
         // --- 1. STATUS CONTROL ---
@@ -348,23 +354,41 @@
             alert("Round Closed.");
         }
 
-        // --- USER MGMT ---
+        // --- USER MGMT & LEADERBOARD ---
         async function fetchUsers() {
-             userListEl.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
-             const q = query(collection(db, `artifacts/${appId}/public/data/registered_users`), orderBy('createdAt', 'desc'));
+             userListEl.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
+             const q = query(collection(db, `artifacts/${appId}/public/data/registered_users`), orderBy('score', 'desc')); // Order by score to see leaders
              const snap = await getDocs(q);
              userListEl.innerHTML = '';
              snap.forEach(d => {
                  const u = d.data();
                  const tr = document.createElement('tr');
                  tr.innerHTML = `
-                    <td class="p-2">${u.username}</td>
+                    <td class="p-2 font-bold">${u.username}</td>
+                    <td class="p-2 text-green-300 font-mono">${u.score || 0}</td>
                     <td class="p-2 text-xs text-gray-500">${d.id}</td>
                     <td class="p-2 text-right"><button class="text-red-500 text-xs" onclick="delUser('${d.id}')">Del</button></td>
                  `;
                  userListEl.appendChild(tr);
              });
         }
+
+        async function resetLeaderboard() {
+            if(!confirm("Reset ALL scores to 0? This cannot be undone.")) return;
+            const usersRef = collection(db, `artifacts/${appId}/public/data/registered_users`);
+            const snap = await getDocs(usersRef);
+            
+            if(snap.empty) return alert("No users found.");
+
+            const batch = writeBatch(db);
+            snap.forEach(d => {
+                batch.update(d.ref, { score: 0 });
+            });
+            await batch.commit();
+            alert("Leaderboard reset!");
+            fetchUsers();
+        }
+
         window.delUser = async (id) => {
             if(confirm('Delete user?')) {
                 await deleteDoc(doc(db, `artifacts/${appId}/public/data/registered_users/${id}`));
