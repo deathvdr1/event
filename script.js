@@ -1,4 +1,3 @@
-// ... (Imports and Config remain same as previous, including UI_TEXT, MISS_MESSAGES, POKEMON_DATA) ...
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -33,7 +32,7 @@ const firebaseConfig = {
   measurementId: "G-RC3WBTFK5J"
 };
 
-// ... (UI_TEXT, MISS_MESSAGES, POKEMON_DATA objects - KEEP AS IS from previous versions) ...
+// ... (UI_TEXT, MISS_MESSAGES, POKEMON_DATA objects remain unchanged) ...
 const UI_TEXT = {
     'en': {
         'title_battle': '(re)Pokémon Battle',
@@ -100,7 +99,7 @@ const UI_TEXT = {
         'leaderboard': 'Leaderboard',
     },
     'ja': {
-        // ... (Keep existing JA translations) ...
+        // ... (Keep Japanese translations) ...
         'title_battle': 'ポケモンバトル',
         'title_choose': 'ポケモンをえらんでね！',
         'play_ai': 'AIとたいせん',
@@ -281,7 +280,6 @@ let appId = 'default-app-id';
 let userId = null;
 let gameUnsubscribe = null;
 let gameDocRef = null;
-let eventCodesUnsubscribe = null;
 
 let playerPokemon = null;
 let opponentPokemon = null;
@@ -303,15 +301,9 @@ const MAX_TURNS = 20;
 
 // --- DOM ELEMENTS ---
 let startScreen, selectionScreen, battleScreen, victoryScreen, helpScreen, lobbyScreen, eventBattleScreen, usernameScreen;
-let playAiButton, playFriendButton, eventBattleButton, helpButton, helpButtonText, helpTitle, helpRule1, helpRule2, helpRule3, helpBackButton;
+let playAiButton, playFriendButton, helpButton, helpButtonText, helpTitle, helpRule1, helpRule2, helpRule3, helpBackButton;
 let lobbyTitle, playerUserId, yourUserIdLabel, createGameButton, lobbyOrDivider, gameIdInput, joinGameButton, lobbyErrorMsg, waitingForPlayerMsg, gameIdDisplay, gameIdLabel, gameIdText, lobbyBackButton;
-let eventBattleBtn, eventBackBtn; 
-// NEW EVENT VARS
-let eventLockedMsg, eventLobbyUI, eventSignInContainer, eventSignedInContainer, eventSignInBtn, eventSignOutBtn, eventStatusMsg, eventParticipantCount, eventPlayerName, eventMatchReadyContainer, eventJoinMatchBtn;
-
-// NEW LEADERBOARD VARS
 let leaderboardBtn, leaderboardScreen, leaderboardList, leaderboardBackBtn;
-
 let pokemonCardDisplay, prevPokemonButton, nextPokemonButton, selectionTitle, waitingForOpponentSelection;
 let playerBox, opponentBox, opponentPokemonName, opponentHpText, opponentHpBar, opponentPokemonImg, playerUsernameEl, opponentUsernameEl;
 let playerPokemonName, playerHpText, playerHpBar, playerPokemonImg;
@@ -320,11 +312,13 @@ let endGameButton, winnerImg, victoryText, restartButton, mainTitle, languageTog
 let logReviewOverlay, logReviewTitle, logReviewContent, showLogButton, closeLogButton;
 let bgMusic;
 let usernameInput, saveUsernameBtn, usernameError, welcomeUserMsg;
-let eventStatusUnsubscribe = null;
-let eventParticipantsUnsubscribe = null;
-let eventMatchUnsubscribe = null;
-let assignedGameId = null;
 
+// EVENT VARS
+let eventBattleBtn, eventBackBtn;
+let eventLockedMsg, eventSignInUI, eventConfirmSignInBtn, eventSignInStatus;
+let eventBracketUI, eventRoundLabel, eventMatchesList;
+let eventStatusUnsubscribe = null;
+let eventRoundUnsubscribe = null;
 
 // --- FUNCTIONS ---
 
@@ -341,7 +335,6 @@ function initDomElements() {
 
     playAiButton = document.getElementById('play-ai-btn');
     playFriendButton = document.getElementById('play-friend-btn');
-    eventBattleBtn = document.getElementById('event-battle-btn');
     leaderboardBtn = document.getElementById('leaderboard-btn');
     helpButton = document.getElementById('help-btn');
     helpButtonText = document.getElementById('help-btn-text');
@@ -354,18 +347,13 @@ function initDomElements() {
     // EVENT BATTLE ELEMENTS
     eventBattleBtn = document.getElementById('event-battle-btn');
     eventBackBtn = document.getElementById('event-back-btn');
-    
     eventLockedMsg = document.getElementById('event-locked-msg');
-    eventLobbyUI = document.getElementById('event-lobby-ui');
-    eventSignInContainer = document.getElementById('event-sign-in-container');
-    eventSignedInContainer = document.getElementById('event-signed-in-container');
-    eventSignInBtn = document.getElementById('event-sign-in-btn');
-    eventSignOutBtn = document.getElementById('event-sign-out-btn');
-    eventStatusMsg = document.getElementById('event-status-msg');
-    eventParticipantCount = document.getElementById('event-participant-count');
-    eventPlayerName = document.getElementById('event-player-name');
-    eventMatchReadyContainer = document.getElementById('event-match-ready-container');
-    eventJoinMatchBtn = document.getElementById('event-join-match-btn');
+    eventSignInUI = document.getElementById('event-signin-ui');
+    eventConfirmSignInBtn = document.getElementById('event-confirm-signin-btn');
+    eventSignInStatus = document.getElementById('event-signin-status');
+    eventBracketUI = document.getElementById('event-bracket-ui');
+    eventRoundLabel = document.getElementById('event-round-label');
+    eventMatchesList = document.getElementById('event-matches-list');
 
     // LEADERBOARD ELEMENTS
     leaderboardList = document.getElementById('leaderboard-list');
@@ -434,7 +422,7 @@ function initDomElements() {
     welcomeUserMsg = document.getElementById('welcome-user-msg');
 }
 
-// ... (getText, updateAllText, toggleLanguage, playBgMusic, initGame match previous logic but need to be included) ...
+// ... (getText, updateAllText, toggleLanguage, playBgMusic, initGame match previous logic) ...
 function getText(key, ...args) {
     const textOrFn = UI_TEXT[currentLanguage][key];
     if (typeof textOrFn === 'function') {
@@ -567,12 +555,11 @@ function initGame() {
         gameUnsubscribe = null;
     }
     
+    // Stop Event Listeners if we go back to main menu
     if (eventStatusUnsubscribe) eventStatusUnsubscribe();
-    if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
-    // Do NOT cancel match listener here, we might need it for re-joining
+    if (eventRoundUnsubscribe) eventRoundUnsubscribe();
     
-    // START LISTENING TO EVENT STATUS (Correct Path)
-    listenToEventStatus();
+    // Restart Listener only when needed (moved to showEventBattleScreen)
 
     if (gameDocRef && localPlayerRole === 'player1') {
         deleteDoc(gameDocRef).catch(e => console.error("Error cleaning up game doc", e));
@@ -591,9 +578,6 @@ function initGame() {
     localPlayerRole = null;
     opponentPlayerName = null;
     gameDocRef = null;
-    // Do NOT reset assignedGameId if we want to support back-to-back games, 
-    // but typically a new game means new ID.
-    // assignedGameId = null; 
     isEventGame = false;
 
     battleLog.innerHTML = `<p id="battle-log-start">${getText('log_welcome')}</p>`;
@@ -611,8 +595,160 @@ function initGame() {
     updateAllText();
 }
 
+// --- NEW EVENT SYSTEM LOGIC ---
 
-// --- LEADERBOARD LOGIC ---
+// 1. Show Screen & Start Listener
+function showEventBattleScreen() {
+    startScreen.classList.add('hidden');
+    eventBattleScreen.classList.remove('hidden');
+    mainTitle.classList.add('hidden');
+    
+    listenToEventStatus();
+}
+
+function hideEventBattleScreen() {
+    startScreen.classList.remove('hidden');
+    eventBattleScreen.classList.add('hidden');
+    mainTitle.classList.remove('hidden');
+    
+    if (eventStatusUnsubscribe) eventStatusUnsubscribe();
+    if (eventRoundUnsubscribe) eventRoundUnsubscribe();
+}
+
+// 2. Listen to Status (Locked, SignIn, Active)
+function listenToEventStatus() {
+    if (eventStatusUnsubscribe) eventStatusUnsubscribe();
+
+    const docRef = doc(db, `artifacts/${appId}/public/data/event_config/status`);
+    eventStatusUnsubscribe = onSnapshot(docRef, (snap) => {
+        const state = snap.data()?.state || 'locked';
+
+        eventLockedMsg.classList.add('hidden');
+        eventSignInUI.classList.add('hidden');
+        eventBracketUI.classList.add('hidden');
+        
+        if (state === 'locked') {
+            eventLockedMsg.classList.remove('hidden');
+        } else if (state === 'signin') {
+            eventSignInUI.classList.remove('hidden');
+            checkEventSignIn();
+        } else if (state === 'active') {
+            eventBracketUI.classList.remove('hidden');
+            listenToActiveRound();
+        }
+    });
+}
+
+// 3. Sign In Logic
+async function checkEventSignIn() {
+    if(!userId) return;
+    const ref = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
+    const snap = await getDoc(ref);
+    if(snap.exists()) {
+        eventConfirmSignInBtn.classList.add('hidden');
+        eventSignInStatus.classList.remove('hidden');
+    } else {
+        eventConfirmSignInBtn.classList.remove('hidden');
+        eventSignInStatus.classList.add('hidden');
+    }
+}
+
+async function signUserIntoEvent() {
+    if(!userId || !localPlayerName) return alert("Error: No username.");
+    eventConfirmSignInBtn.disabled = true;
+    try {
+        await setDoc(doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`), {
+            userId: userId,
+            username: localPlayerName,
+            joinedAt: serverTimestamp()
+        });
+        checkEventSignIn();
+    } catch(e) {
+        console.error(e);
+        alert("Sign in failed.");
+        eventConfirmSignInBtn.disabled = false;
+    }
+}
+
+// 4. Bracket / Matchmaking Logic
+function listenToActiveRound() {
+    if (eventRoundUnsubscribe) eventRoundUnsubscribe();
+    
+    const ref = doc(db, `artifacts/${appId}/public/data/event_data/active_round`);
+    eventRoundUnsubscribe = onSnapshot(ref, (snap) => {
+        eventMatchesList.innerHTML = '';
+        if(!snap.exists()) {
+             eventMatchesList.innerHTML = '<p class="text-gray-400">Waiting for round to be published...</p>';
+             return;
+        }
+        
+        const data = snap.data();
+        eventRoundLabel.textContent = data.roundName || "Current Round";
+        
+        const matches = data.matches || [];
+        if(matches.length === 0) {
+            eventMatchesList.innerHTML = '<p class="text-gray-400">No matches in this round.</p>';
+            return;
+        }
+
+        matches.forEach(m => {
+            const card = document.createElement('div');
+            card.className = "bg-gray-800 border border-gray-600 rounded p-3 flex justify-between items-center";
+            
+            // Check if I am involved
+            const isMyMatch = (m.p1 === localPlayerName || m.p2 === localPlayerName);
+            const myColor = isMyMatch ? "border-yellow-400 border-2" : "";
+            if(isMyMatch) card.className = `bg-gray-800 rounded p-3 flex justify-between items-center ${myColor}`;
+
+            card.innerHTML = `
+                <div class="flex flex-col md:flex-row items-center gap-2 flex-1">
+                    <span class="text-blue-300 font-bold">${m.p1}</span>
+                    <span class="text-gray-500 text-xs">VS</span>
+                    <span class="text-red-300 font-bold">${m.p2}</span>
+                </div>
+            `;
+
+            if(isMyMatch) {
+                const btn = document.createElement('button');
+                btn.className = "retro-btn !text-xs !py-2 !px-4 ml-4 bg-green-600 animate-pulse";
+                btn.textContent = "FIGHT";
+                btn.onclick = () => joinEventGame(m.gameId, m.p1, m.p2);
+                card.appendChild(btn);
+            } else {
+                 const status = document.createElement('span');
+                 status.className = "text-xs text-gray-500 ml-4";
+                 status.textContent = "In Progress";
+                 card.appendChild(status);
+            }
+
+            eventMatchesList.appendChild(card);
+        });
+    });
+}
+
+async function joinEventGame(gId, p1Name, p2Name) {
+    // 1. Hide Event Screen
+    hideEventBattleScreen();
+    // 2. Prepare Game State locally
+    isEventGame = true;
+    gameId = gId;
+    
+    // 3. Determine Role based on name match
+    if(localPlayerName === p1Name) localPlayerRole = 'player1';
+    else if (localPlayerName === p2Name) localPlayerRole = 'player2';
+    else { alert("Name mismatch error."); return; }
+    
+    // 4. Set Ref & Listen
+    gameDocRef = doc(db, `artifacts/${appId}/public/data/games/${gameId}`);
+    
+    // 5. Trigger "Ready" on doc to show presence? (Optional, handled by selection screen)
+    
+    // 6. Go to Selection immediately via listener logic, but we trigger listener manually first
+    listenToGame();
+}
+
+
+// --- LEADERBOARD & OTHER LOGIC (UNCHANGED) ---
 
 async function showLeaderboard() {
     startScreen.classList.add('hidden');
@@ -643,7 +779,6 @@ async function showLeaderboard() {
             const div = document.createElement('div');
             div.className = "grid grid-cols-3 gap-2 border-b border-white/10 py-2 items-center hover:bg-white/5";
             
-            // Highlight top 3
             let rankClass = "text-white";
             if (rank === 1) rankClass = "text-yellow-400 font-bold";
             else if (rank === 2) rankClass = "text-gray-300 font-bold";
@@ -683,215 +818,11 @@ async function incrementUserScore() {
     }
 }
 
-
-// --- EVENT BATTLE LOGIC ---
-
-function listenToEventStatus() {
-    // FIX: Path to match Index5.html (event_config/status)
-    const docRef = doc(db, `artifacts/${appId}/public/data/event_config/status`);
-    eventStatusUnsubscribe = onSnapshot(docRef, (docSnap) => {
-        const data = docSnap.data();
-        const state = data ? data.state : 'locked';
-
-        if (state === 'locked') {
-            eventBattleBtn.disabled = true;
-            eventBattleBtn.textContent = "Event Locked";
-            eventBattleBtn.style.backgroundColor = "#555";
-            eventBattleBtn.style.color = "#888";
-            if (!eventBattleScreen.classList.contains('hidden')) {
-                 showEventLockedUI();
-            }
-        } else {
-            eventBattleBtn.disabled = false;
-            eventBattleBtn.textContent = "Event Battle";
-            eventBattleBtn.style.backgroundColor = "#ff5722";
-            eventBattleBtn.style.color = "#fff";
-            
-            if (!eventBattleScreen.classList.contains('hidden')) {
-                if (state === 'started') {
-                    listenToMyMatch();
-                } else {
-                    showEventLobbyUI();
-                }
-            }
-        }
-    });
-}
-
-function showEventBattleScreen() {
-    startScreen.classList.add('hidden');
-    eventBattleScreen.classList.remove('hidden');
-    mainTitle.classList.add('hidden');
-    
-    // Resume match listening if we were knocked out or waiting
-    listenToMyMatch();
-    checkEventSignInStatus();
-}
-
-function hideEventBattleScreen() {
-    startScreen.classList.remove('hidden');
-    eventBattleScreen.classList.add('hidden');
-    mainTitle.classList.remove('hidden');
-    
-    if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
-    // Keep match listener alive if possible, but safe to detach
-    // if (eventMatchUnsubscribe) eventMatchUnsubscribe();
-}
-
-function showEventLockedUI() {
-    eventLockedMsg.classList.remove('hidden');
-    eventLobbyUI.classList.add('hidden');
-    eventMatchReadyContainer.classList.add('hidden');
-}
-
-function showEventLobbyUI() {
-    eventLockedMsg.classList.add('hidden');
-    eventLobbyUI.classList.remove('hidden');
-    eventMatchReadyContainer.classList.add('hidden');
-    
-    listenToEventParticipants();
-}
-
-async function checkEventSignInStatus() {
-    if (!userId) return;
-    // FIX: Flattened Path (event_participants)
-    const participantRef = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
-    const docSnap = await getDoc(participantRef);
-    
-    if (docSnap.exists()) {
-        eventSignInContainer.classList.add('hidden');
-        eventSignedInContainer.classList.remove('hidden');
-        eventPlayerName.textContent = localPlayerName || "Trainer";
-        
-        // Check if waiting for next round
-        const data = docSnap.data();
-        if (data.status === 'waiting') {
-             eventStatusMsg.textContent = "You won! Waiting for next round pairing...";
-             eventStatusMsg.className = "text-green-300 animate-pulse font-bold";
-        }
-    } else {
-        eventSignInContainer.classList.remove('hidden');
-        eventSignedInContainer.classList.add('hidden');
-    }
-    // Only show general lobby if not matched
-    if (eventMatchReadyContainer.classList.contains('hidden')) {
-        showEventLobbyUI();
-    }
-}
-
-async function joinEvent() {
-    if (!userId || !localPlayerName) {
-        alert("You must have a username to join!");
-        return;
-    }
-    
-    eventSignInBtn.disabled = true;
-    // FIX: Flattened Path (event_participants)
-    const participantRef = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
-    // CRITICAL FIX: Clear old match data to prevent "Game Full" error
-    const matchRef = doc(db, `artifacts/${appId}/public/data/event_matches/${userId}`);
-    
-    try {
-        // Clear stale match
-        await deleteDoc(matchRef);
-        // Set new participant entry
-        await setDoc(participantRef, {
-            userId: userId,
-            username: localPlayerName,
-            status: 'waiting',
-            joinedAt: serverTimestamp()
-        });
-        checkEventSignInStatus();
-        eventSignInBtn.disabled = false;
-    } catch (e) {
-        console.error("Error joining event:", e);
-        eventSignInBtn.disabled = false;
-    }
-}
-
-async function leaveEvent() {
-    if (!confirm("Are you sure you want to sign out of the event?")) return;
-    
-    eventSignOutBtn.disabled = true;
-    // FIX: Flattened Path (event_participants)
-    const participantRef = doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`);
-    
-    try {
-        await deleteDoc(participantRef);
-        checkEventSignInStatus();
-        eventSignOutBtn.disabled = false;
-    } catch (e) {
-        console.error("Error leaving event:", e);
-        eventSignOutBtn.disabled = false;
-    }
-}
-
-function listenToEventParticipants() {
-    if (eventParticipantsUnsubscribe) eventParticipantsUnsubscribe();
-    
-    // FIX: Flattened Path (event_participants)
-    const colRef = collection(db, `artifacts/${appId}/public/data/event_participants`);
-    eventParticipantsUnsubscribe = onSnapshot(colRef, (snapshot) => {
-        const count = snapshot.size;
-        eventParticipantCount.textContent = count;
-        
-        if (count % 2 !== 0) {
-            eventStatusMsg.textContent = "Waiting for more players to join...";
-            eventStatusMsg.className = "text-yellow-300 animate-pulse";
-        } else {
-            eventStatusMsg.textContent = "Waiting for event to start...";
-            eventStatusMsg.className = "text-green-400 font-bold";
-        }
-    });
-}
-
-function listenToMyMatch() {
-    if (eventMatchUnsubscribe) eventMatchUnsubscribe();
-    
-    // FIX: Flattened Path (event_matches)
-    const matchRef = doc(db, `artifacts/${appId}/public/data/event_matches/${userId}`);
-    eventMatchUnsubscribe = onSnapshot(matchRef, (docSnap) => {
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            // Only trigger if we get a NEW game ID
-            if (data.gameId && data.gameId !== assignedGameId) {
-                assignedGameId = data.gameId;
-                
-                // Auto-join logic
-                eventLobbyUI.classList.add('hidden');
-                eventMatchReadyContainer.classList.remove('hidden');
-                
-                // If we are on the event screen, auto-join
-                if (!eventBattleScreen.classList.contains('hidden')) {
-                    setTimeout(() => joinAssignedMatch(), 1000);
-                }
-            }
-        }
-    });
-}
-
-function joinAssignedMatch() {
-    if (!assignedGameId) return;
-    
-    hideEventBattleScreen();
-    showLobbyScreen();
-    gameIdInput.value = assignedGameId;
-    isEventGame = true; // Mark as event game
-    
-    setTimeout(() => {
-        joinGame();
-    }, 500);
-}
-
-
-
-// --- USERNAME LOGIC ---
+// ... (Rest of logic: Username, Help, Selection, Firebase Init - Unchanged) ...
 
 async function checkUserProfile() {
     if (!userId) return;
-    
     const userDocRef = doc(db, `artifacts/${appId}/public/data/registered_users/${userId}`);
-    
     try {
         const docSnap = await getDoc(userDocRef);
         if (docSnap.exists()) {
@@ -913,13 +844,11 @@ async function handleSaveUsername() {
         usernameError.textContent = "Username must be at least 3 characters.";
         return;
     }
-    
     usernameError.textContent = "Checking availability...";
     saveUsernameBtn.disabled = true;
 
     const usersRef = collection(db, `artifacts/${appId}/public/data/registered_users`);
     const q = query(usersRef, where("username", "==", inputName));
-    
     try {
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
@@ -927,20 +856,16 @@ async function handleSaveUsername() {
             saveUsernameBtn.disabled = false;
             return;
         }
-
         const userDocRef = doc(db, `artifacts/${appId}/public/data/registered_users/${userId}`);
         await setDoc(userDocRef, {
             username: inputName,
             userId: userId,
-            score: 0, // Initialize score
+            score: 0,
             createdAt: serverTimestamp()
         });
-        
         localPlayerName = inputName;
         usernameError.textContent = "";
-        
         initGame();
-        
     } catch (e) {
         console.error("Error saving username:", e);
         usernameError.textContent = "Error saving. Try again.";
@@ -948,39 +873,32 @@ async function handleSaveUsername() {
     }
 }
 
-// --- SCREEN NAVIGATION ---
-
 function showHelpScreen() {
     startScreen.classList.add('hidden');
     helpScreen.classList.remove('hidden');
     mainTitle.classList.add('hidden');
     updateAllText();
 }
-
 function hideHelpScreen() {
     startScreen.classList.remove('hidden');
     helpScreen.classList.add('hidden');
     mainTitle.classList.remove('hidden');
     updateAllText();
 }
-
 function showAiSelectionScreen() {
     playBgMusic();
     gameMode = 'ai';
     startScreen.classList.add('hidden');
     selectionScreen.classList.remove('hidden');
     mainTitle.classList.add('hidden');
-    
     prevPokemonButton.classList.remove('hidden');
     nextPokemonButton.classList.remove('hidden');
     pokemonCardDisplay.classList.remove('hidden');
     selectionTitle.textContent = getText('selection_title');
     waitingForOpponentSelection.classList.add('hidden');
-    
     renderCurrentPokemonCard();
     updateAllText();
 }
-
 function showLobbyScreen() {
     playBgMusic();
     gameMode = 'multiplayer';
@@ -989,17 +907,13 @@ function showLobbyScreen() {
     mainTitle.classList.add('hidden');
     updateAllText();
 }
-
 function leaveLobby() {
     initGame(); 
 }
 
-// --- POKÉMON SELECTION ---
-
 function renderCurrentPokemonCard() {
     const pokemon = POKEMON_DATA[currentLanguage][currentSelectionIndex];
     const basePokemon = POKEMON_DATA['en'][currentSelectionIndex];
-    
     pokemonCardDisplay.innerHTML = `
         <div id="pokemon-card-clickable" class="pokemon-card w-full max-w-[300px] mx-auto p-4 rounded-lg border-4 shadow-lg cursor-pointer type-${basePokemon.type}-bg type-${basePokemon.type}-border">
             <h3 class="text-xl md:text-2xl font-bold text-center mb-3 type-${basePokemon.type}-text">${pokemon.name}</h3>
@@ -1014,23 +928,19 @@ function renderCurrentPokemonCard() {
             </div>
         </div>
     `;
-
     const cardElement = document.getElementById('pokemon-card-clickable');
     if (cardElement) {
         cardElement.addEventListener('click', () => selectPokemon(basePokemon.id));
     }
 }
-
 function showPrevPokemon() {
     currentSelectionIndex = (currentSelectionIndex - 1 + POKEMON_DATA[currentLanguage].length) % POKEMON_DATA[currentLanguage].length;
     renderCurrentPokemonCard();
 }
-
 function showNextPokemon() {
     currentSelectionIndex = (currentSelectionIndex + 1) % POKEMON_DATA[currentLanguage].length;
     renderCurrentPokemonCard();
 }
-
 async function selectPokemon(id) {
     const basePokemon = POKEMON_DATA['en'].find(p => p.id === id);
     playerPokemon = JSON.parse(JSON.stringify(basePokemon));
@@ -1043,7 +953,6 @@ async function selectPokemon(id) {
         }
         const baseAiPokemon = POKEMON_DATA['en'][aiIndex];
         opponentPokemon = JSON.parse(JSON.stringify(baseAiPokemon));
-        
         startBattle();
     } else {
         try {
@@ -1052,37 +961,30 @@ async function selectPokemon(id) {
                 [`${localPlayerRole}.pokemonId`]: id,
                 [`${localPlayerRole}.ready`]: true
             });
-            
             prevPokemonButton.classList.add('hidden');
             nextPokemonButton.classList.add('hidden');
             pokemonCardDisplay.classList.add('hidden');
             selectionTitle.textContent = getText('selection_title');
             waitingForOpponentSelection.classList.remove('hidden');
-
         } catch (e) {
             console.error("Error selecting Pokemon:", e);
         }
     }
 }
 
-// --- FIREBASE MULTIPLAYER ---
-
 async function initFirebase() {
     try {
         appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
-
         app = initializeApp(config);
         db = getFirestore(app);
         auth = getAuth(app);
         setLogLevel('debug');
-
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
             await signInWithCustomToken(auth, __initial_auth_token);
         } else {
             await signInAnonymously(auth);
         }
-
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 userId = user.uid;
@@ -1094,26 +996,21 @@ async function initFirebase() {
                 userId = null;
             }
         });
-
     } catch (e) {
         console.error("Error initializing Firebase:", e);
         playFriendButton.textContent = 'Multiplayer Disabled';
         playFriendButton.disabled = true;
     }
 }
-
 async function createGame() {
     createGameButton.disabled = true;
     joinGameButton.disabled = true;
     gameIdInput.disabled = true;
     lobbyErrorMsg.textContent = '';
-    
     const gamesCollection = collection(db, `artifacts/${appId}/public/data/games`);
-    
     try {
         const newGameDoc = doc(gamesCollection);
         gameId = newGameDoc.id;
-        
         const player1Data = {
             hp: 100,
             pokemon: null,
@@ -1121,7 +1018,6 @@ async function createGame() {
             ready: false,
             username: localPlayerName 
         };
-        
         const gameData = {
             player1: player1Data,
             player2: null,
@@ -1132,18 +1028,13 @@ async function createGame() {
             createdAt: serverTimestamp(),
             lastAction: serverTimestamp()
         };
-
         await setDoc(newGameDoc, gameData);
-        
         gameDocRef = newGameDoc;
         localPlayerRole = 'player1';
-
         gameIdText.textContent = gameId;
         gameIdDisplay.classList.remove('hidden');
         waitingForPlayerMsg.classList.remove('hidden');
-        
         listenToGame();
-
     } catch (e) {
         console.error("Error creating game:", e);
         lobbyErrorMsg.textContent = getText('lobby_error_creating');
@@ -1152,45 +1043,28 @@ async function createGame() {
         gameIdInput.disabled = false;
     }
 }
-
 async function joinGame() {
     gameId = gameIdInput.value.trim();
     if (!gameId) return;
-
     createGameButton.disabled = true;
     joinGameButton.disabled = true;
     gameIdInput.disabled = true;
     lobbyErrorMsg.textContent = '';
-    
     const gameRef = doc(db, `artifacts/${appId}/public/data/games/${gameId}`);
-    
     try {
         const gameSnap = await getDoc(gameRef);
         if (!gameSnap.exists()) throw new Error("Game not found");
-        
         const gameData = gameSnap.data();
-
-        // --- NEW LOGIC FOR EVENT GAMES ---
         if (isEventGame) {
-            // Admin has already created the game with P1 and P2 slots filled
-            // We just need to find which one we are
-            if (gameData.player1 && gameData.player1.username === localPlayerName) {
-                localPlayerRole = 'player1';
-            } else if (gameData.player2 && gameData.player2.username === localPlayerName) {
-                localPlayerRole = 'player2';
-            } else {
-                throw new Error("You are not assigned to this match!");
-            }
-            
-            // We do NOT write to the doc, Admin did that. We just listen.
+             // Redundant check, but safe
+            if (gameData.player1 && gameData.player1.username === localPlayerName) localPlayerRole = 'player1';
+            else if (gameData.player2 && gameData.player2.username === localPlayerName) localPlayerRole = 'player2';
+            else throw new Error("You are not assigned to this match!");
             gameDocRef = gameRef;
             listenToGame();
-            return; // Exit function, don't run standard join logic
+            return; 
         }
-        // ---------------------------------
-
         if (gameData.player2) throw new Error("Game is full");
-        
         const player2Data = {
             hp: 100,
             pokemon: null,
@@ -1198,18 +1072,14 @@ async function joinGame() {
             ready: false,
             username: localPlayerName 
         };
-
         await updateDoc(gameRef, {
             player2: player2Data,
             gameState: 'selection',
             log: arrayUnion(`${localPlayerName} has joined!`)
         });
-
         gameDocRef = gameRef;
         localPlayerRole = 'player2';
-
         listenToGame();
-
     } catch (e) {
         console.error("Error joining game:", e);
         lobbyErrorMsg.textContent = getText('lobby_error_joining') + " " + e.message;
@@ -1218,10 +1088,8 @@ async function joinGame() {
         gameIdInput.disabled = false;
     }
 }
-
 function listenToGame() {
     if (gameUnsubscribe) gameUnsubscribe();
-    
     gameUnsubscribe = onSnapshot(gameDocRef, (doc) => {
         if (!doc.exists()) {
             if (gameInProgress) {
@@ -1232,27 +1100,18 @@ function listenToGame() {
             }
             return;
         }
-
         const gameData = doc.data();
-        // Propagate the event flag if it exists in the game data
-        if (gameData.isEvent) {
-            isEventGame = true;
-        }
-        
+        if (gameData.isEvent) isEventGame = true;
         const opponentRole = localPlayerRole === 'player1' ? 'player2' : 'player1';
-
         currentTurn = gameData.currentTurn;
-        
         if (gameData[opponentRole] && gameData[opponentRole].username) {
             opponentPlayerName = gameData[opponentRole].username;
         }
-
         if (gameData[localPlayerRole]) playerHP = gameData[localPlayerRole].hp;
         if (gameData[opponentRole]) {
             opponentHP = gameData[opponentRole].hp;
             opponentPokemon = gameData[opponentRole].pokemon;
         }
-        
         if (gameData.log && battleLog) {
             const logLength = battleLog.children.length;
             if (gameData.log.length > logLength || (logLength === 1 && battleLog.children[0].id === 'battle-log-start')) {
@@ -1260,19 +1119,16 @@ function listenToGame() {
                 gameData.log.forEach(msg => logMessage(msg));
             }
         }
-
         switch (gameData.gameState) {
             case 'waiting':
                 lobbyScreen.classList.remove('hidden');
                 selectionScreen.classList.add('hidden');
                 waitingForPlayerMsg.classList.remove('hidden');
                 break;
-                
             case 'selection':
                 lobbyScreen.classList.add('hidden');
                 selectionScreen.classList.remove('hidden');
                 mainTitle.classList.add('hidden');
-                
                 if (gameData[localPlayerRole] && gameData[localPlayerRole].ready) {
                     prevPokemonButton.classList.add('hidden');
                     nextPokemonButton.classList.add('hidden');
@@ -1287,11 +1143,9 @@ function listenToGame() {
                     waitingForOpponentSelection.classList.add('hidden');
                     renderCurrentPokemonCard();
                 }
-                
                 if (gameData.player1.ready && gameData.player2.ready) {
                     playerPokemon = gameData[localPlayerRole].pokemon;
                     opponentPokemon = gameData[opponentRole].pokemon;
-                    
                     if (localPlayerRole === 'player1' && !gameInProgress) {
                         updateDoc(gameDocRef, {
                             gameState: 'player1_turn',
@@ -1301,21 +1155,17 @@ function listenToGame() {
                     if (!gameInProgress) startBattle();
                 }
                 break;
-                
             case 'player1_turn':
                 isPlayerTurn = (localPlayerRole === 'player1');
                 if (gameInProgress) updateUI();
                 break;
-                
             case 'player2_turn':
                 isPlayerTurn = (localPlayerRole === 'player2');
                 if (gameInProgress) updateUI();
                 break;
-                
             case 'game_over':
                 if (!gameInProgress) return;
                 gameInProgress = false;
-                
                 if (gameData.winner === localPlayerRole) {
                     showVictoryScreen(playerPokemon, 'victory');
                 } else if (gameData.winner === opponentRole) {
@@ -1325,75 +1175,56 @@ function listenToGame() {
                 }
                 break;
         }
-        
     }, (error) => {
         console.error("Error in game listener:", error);
     });
 }
-
-
-// --- BATTLE LOGIC ---
-
 function startBattle() {
     gameInProgress = true;
     selectionScreen.classList.add('hidden');
     lobbyScreen.classList.add('hidden');
     battleScreen.classList.remove('hidden');
     mainTitle.classList.add('hidden');
-
     endGameButton.textContent = getText('end_game');
     endGameButton.classList.remove('hidden');
-
     const playerLangData = POKEMON_DATA[currentLanguage].find(p => p.id === playerPokemon.id);
     const opponentLangData = POKEMON_DATA[currentLanguage].find(p => p.id === opponentPokemon.id);
-
     if (gameMode === 'multiplayer') {
-        // Name is already set in localPlayerName/opponentPlayerName by listener or login
     } else {
         opponentPlayerName = 'AI';
     }
-    
     playerUsernameEl.textContent = localPlayerName;
     playerUsernameEl.className = `text-sm md:text-lg font-bold text-center md:text-left truncate type-${playerPokemon.type}-text`;
     playerPokemonName.textContent = playerLangData.name;
     playerPokemonImg.src = playerPokemon.image;
     playerPokemonName.className = `text-[0.625rem] md:text-base font-normal leading-tight text-center md:text-left type-${playerPokemon.type}-text`;
     playerBox.className = `p-1 md:p-4 rounded-lg border-2 shadow-md type-${playerPokemon.type}-bg type-${playerPokemon.type}-border`;
-
     opponentUsernameEl.textContent = opponentPlayerName;
     opponentUsernameEl.className = `text-sm md:text-lg font-bold text-center md:text-left truncate type-${opponentPokemon.type}-text`;
     opponentPokemonName.textContent = opponentLangData.name; 
     opponentPokemonImg.src = opponentPokemon.image;
     opponentPokemonName.className = `text-[0.625rem] md:text-base font-normal leading-tight text-center md:text-left type-${opponentPokemon.type}-text`;
     opponentBox.className = `p-1 md:p-4 rounded-lg border-2 shadow-md type-${opponentPokemon.type}-bg type-${opponentPokemon.type}-border`;
-
     createAttackButtons();
-
     if (gameMode === 'ai') {
         battleLog.innerHTML = '';
         logMessage(getText('log_player_chose', playerLangData.name));
         logMessage(getText('log_ai_chose', opponentLangData.name));
         logMessage(getText('log_battle_begin'));
     }
-
     yourTurnTitle.textContent = getText(isPlayerTurn ? 'your_turn' : 'opponents_turn');
-    battleLogTitle.textContent = getText('battle_log'); // Fix key typo
-
+    battleLogTitle.textContent = getText('battle_log');
     updateUI();
 }
-
 function createAttackButtons() {
     playerControls.innerHTML = '';
     if (!playerPokemon) return;
-    
     const playerLangData = POKEMON_DATA[currentLanguage].find(p => p.id === playerPokemon.id);
-
     playerLangData.attacks.forEach((attack, index) => {
         const baseAttack = playerPokemon.attacks[index];
         const button = document.createElement('button');
         button.textContent = attack.name;
         button.className = `retro-btn !leading-tight !px-2 !pt-2 !pb-3 md:!p-4 attack-btn type-${playerPokemon.type}-btn w-full`;
-
         if (baseAttack.type === 'heavy') {
             button.id = 'heavy-attack-btn';
             button.classList.add('heavy-attack-disabled');
@@ -1404,19 +1235,15 @@ function createAttackButtons() {
     });
     updateUI();
 }
-
 function getMissChance(attack) {
     if (attack.type === 'medium') return 0.7;
     return 0.4;
 }
-
 async function playerAttack(attackIndex) {
     if (!isPlayerTurn || !gameInProgress) return;
-
     const attack = playerPokemon.attacks[attackIndex];
     const attackName = POKEMON_DATA[currentLanguage].find(p => p.id === playerPokemon.id).attacks[attackIndex].name;
     const pokemonName = POKEMON_DATA[currentLanguage].find(p => p.id === playerPokemon.id).name;
-
     if (attack.type === 'heavy' && playerHP >= 50) {
         logMessage(getText('log_heavy_fail', attackName));
         if (gameMode === 'multiplayer') {
@@ -1424,24 +1251,20 @@ async function playerAttack(attackIndex) {
         }
         return; 
     }
-
     isPlayerTurn = false;
     updateUI(); 
     animateAttack(playerPokemonImg, true);
-
     const missChance = getMissChance(attack);
     const missReasons = MISS_MESSAGES[currentLanguage];
     let damage = 0;
     let didMiss = false;
     let missReason = '';
-
     if (Math.random() < missChance) {
         didMiss = true;
         missReason = missReasons[Math.floor(Math.random() * missReasons.length)];
     } else {
         damage = attack.damage;
     }
-
     if (gameMode === 'ai') {
         logMessage(getText('log_player_command', pokemonName, attackName));
         if (didMiss) {
@@ -1458,14 +1281,12 @@ async function playerAttack(attackIndex) {
         const opponentRole = localPlayerRole === 'player1' ? 'player2' : 'player1';
         const newOpponentHP = Math.max(0, opponentHP - damage);
         const nextTurn = currentTurn + 1;
-        
         const logMessages = [getText('log_player_command', pokemonName, attackName)];
         if (didMiss) {
             logMessages.push(getText('log_miss', missReason));
         } else {
             logMessages.push(getText('log_hit', attackName, damage));
         }
-
         const updateData = {
             currentTurn: nextTurn,
             gameState: `${opponentRole}_turn`,
@@ -1473,7 +1294,6 @@ async function playerAttack(attackIndex) {
             log: arrayUnion(...logMessages),
             lastAction: serverTimestamp()
         };
-        
         let gameOver = false;
         const opponentLangName = POKEMON_DATA[currentLanguage].find(p => p.id === opponentPokemon.id).name;
         if (newOpponentHP <= 0) {
@@ -1498,24 +1318,16 @@ async function playerAttack(attackIndex) {
             updateData.log = arrayUnion(...logMessages);
             gameOver = true;
         }
-        
         updateDoc(gameDocRef, updateData).catch(e => console.error("Error during attack:", e));
     }
 }
-
-
 function aiTurn() {
     if (!gameInProgress || gameMode !== 'ai') return;
-
     const { attack, attackName, pokemonName } = getAiAttack();
-
     animateAttack(opponentPokemonImg, false);
-
     logMessage(getText('log_ai_attack', pokemonName, attackName));
-    
     const missChance = getMissChance(attack);
     const missReasons = MISS_MESSAGES[currentLanguage];
-
     if (Math.random() < missChance) {
         logMessage(getText('log_miss', missReasons[Math.floor(Math.random() * missReasons.length)]));
     } else {
@@ -1524,23 +1336,19 @@ function aiTurn() {
         logMessage(getText('log_hit', attackName, damage));
         animateDamage(playerPokemonImg);
     }
-
     currentTurn++;
     isPlayerTurn = true;
     updateUI();
     checkGameOver();
 }
-
 function getAiAttack() {
     const attacks = opponentPokemon.attacks;
     const heavyAttack = attacks.find(a => a.type === 'heavy');
     const mediumAttack = attacks.find(a => a.type === 'medium');
     const basicAttacks = attacks.filter(a => a.damage === 20);
-
     const aiLangData = POKEMON_DATA[currentLanguage].find(p => p.id === opponentPokemon.id);
     const pokemonName = aiLangData.name;
     let chosenAttack = null;
-
     if (heavyAttack && opponentHP < 50 && Math.random() < 0.75) {
         logMessage(getText('log_ai_focus', pokemonName));
         chosenAttack = heavyAttack;
@@ -1561,23 +1369,17 @@ function getAiAttack() {
             chosenAttack = basicAttacks[1] || basicAttacks[0];
         }
     }
-
     if (!chosenAttack) {
         chosenAttack = basicAttacks[Math.floor(Math.random() * basicAttacks.length)];
     }
-
     const attackIndex = attacks.findIndex(a => a.name === chosenAttack.name);
     const attackName = aiLangData.attacks[attackIndex].name;
-
     return { attack: chosenAttack, attackName, pokemonName };
 }
-
 function checkGameOver() {
     if (gameMode !== 'ai' || !gameInProgress) return true;
-
     const playerLangName = POKEMON_DATA[currentLanguage].find(p => p.id === playerPokemon.id).name;
     const aiLangName = POKEMON_DATA[currentLanguage].find(p => p.id === opponentPokemon.id).name;
-
     if (opponentHP <= 0) {
         logMessage(getText('log_ai_fainted', aiLangName));
         showVictoryScreen(playerPokemon, 'victory'); 
@@ -1588,7 +1390,6 @@ function checkGameOver() {
         showVictoryScreen(opponentPokemon, 'defeat'); 
         return true;
     }
-
     if (currentTurn > MAX_TURNS) {
         logMessage(getText('log_times_up'));
         if (playerHP > opponentHP) {
@@ -1605,17 +1406,13 @@ function checkGameOver() {
     }
     return false;
 }
-
 function updateUI() {
     playerHpText.textContent = getText('hp_text', playerHP, 100);
     opponentHpText.textContent = getText('hp_text', opponentHP, 100);
-
     updateHpBar(playerHpBar, playerHP);
     updateHpBar(opponentHpBar, opponentHP);
-
     turnCounter.textContent = getText('turn_counter', Math.min(Math.ceil(currentTurn / 2), MAX_TURNS / 2), MAX_TURNS / 2);
     yourTurnTitle.textContent = getText(isPlayerTurn ? 'your_turn' : 'opponents_turn');
-
     const heavyBtn = document.getElementById('heavy-attack-btn');
     if (heavyBtn) {
         if (playerHP < 50) {
@@ -1628,7 +1425,6 @@ function updateUI() {
             heavyBtn.disabled = true;
         }
     }
-
     playerControls.querySelectorAll('button').forEach(btn => {
         if (!isPlayerTurn || !gameInProgress) {
             btn.disabled = true;
@@ -1641,7 +1437,6 @@ function updateUI() {
         }
     });
 }
-
 function updateHpBar(barElement, currentHp) {
     if (!barElement) return;
     const hpPercent = currentHp / 100;
@@ -1649,19 +1444,13 @@ function updateHpBar(barElement, currentHp) {
     const backgroundPosition = 100 - (hpPercent * 100);
     barElement.style.backgroundPosition = `${backgroundPosition}% 50%`;
 }
-
-
 function showVictoryScreen(winner, messageKey) {
     gameInProgress = false;
-
     logReviewContent.innerHTML = battleLog.innerHTML;
     logReviewContent.scrollTop = logReviewContent.scrollHeight;
-
     endGameButton.classList.add('hidden');
     victoryScreen.dataset.result = messageKey;
-    
     victoryText.textContent = '';
-
     if (winner) {
         winnerImg.src = winner.image.includes('placehold.co') ? winner.image.replace('150x150', '320x320') : winner.image;
         winnerImg.className = `w-full h-full object-cover rounded-full shadow-lg border-8 type-${winner.type}-border`;
@@ -1669,11 +1458,9 @@ function showVictoryScreen(winner, messageKey) {
         winnerImg.src = 'https://placehold.co/320x320/EFEFEF/333?text=DRAW';
         winnerImg.className = 'w-full h-full object-cover rounded-full shadow-lg border-8 border-gray-500';
     }
-
     if (messageKey === 'victory') {
         victoryText.textContent = getText('victory', localPlayerName || 'Player');
         victoryText.className = 'victory-text-base victory-text-win';
-        // NEW: Increment Score for multiplayer/event
         if (gameMode === 'multiplayer' || isEventGame) {
             incrementUserScore();
         }
@@ -1684,33 +1471,8 @@ function showVictoryScreen(winner, messageKey) {
         victoryText.textContent = getText('draw');
         victoryText.className = 'victory-text-base victory-text-draw';
     }
-
     restartButton.textContent = getText('play_again');
     showLogButton.textContent = getText('view_log');
-
-    // Handle Event Mode Progression
-    if (isEventGame) {
-        // If we won, update status to waiting for next round
-        if (messageKey === 'victory') {
-            updateDoc(doc(db, `artifacts/${appId}/public/data/event_participants/${userId}`), {
-                status: 'waiting',
-                updatedAt: serverTimestamp()
-            });
-            // Show custom message
-            victoryText.textContent = "Round Won! Returning to Lobby...";
-            setTimeout(() => {
-                showEventBattleScreen(); // This will show the "Waiting for next round" state
-            }, 3000);
-        } else {
-            // Lost or draw
-            victoryText.textContent = "Eliminated!";
-            // Reset status or mark eliminated
-            setTimeout(() => {
-                showEventBattleScreen();
-            }, 3000);
-        }
-    }
-
     if (gameUnsubscribe) {
         gameUnsubscribe();
         gameUnsubscribe = null;
@@ -1722,25 +1484,12 @@ function showVictoryScreen(winner, messageKey) {
             gameId = null;
         }, 10000); 
     }
-
-    if (!isEventGame) {
-        setTimeout(() => {
-            battleScreen.classList.add('hidden');
-            victoryScreen.classList.remove('hidden');
-            mainTitle.classList.add('hidden');
-        }, 1000);
-    } else {
-        // For events, we handle transition above, but ensure screens are toggled if needed
-        if (messageKey !== 'victory') {
-             setTimeout(() => {
-                battleScreen.classList.add('hidden');
-                victoryScreen.classList.remove('hidden');
-                mainTitle.classList.add('hidden');
-            }, 1000);
-        }
-    }
+    setTimeout(() => {
+        battleScreen.classList.add('hidden');
+        victoryScreen.classList.remove('hidden');
+        mainTitle.classList.add('hidden');
+    }, 1000);
 }
-
 function logMessage(message, forceClear = false) {
     if (forceClear) {
         battleLog.innerHTML = '';
@@ -1750,10 +1499,8 @@ function logMessage(message, forceClear = false) {
     battleLog.appendChild(p);
     battleLog.scrollTop = battleLog.scrollHeight;
 }
-
 async function endGame() {
     if (!gameInProgress) return; 
-    
     if (gameMode === 'ai') {
         gameInProgress = false; 
         logMessage(getText('log_forfeit'));
@@ -1770,7 +1517,6 @@ async function endGame() {
     }
     updateUI();
 }
-
 function animateDamage(imgElement) {
     if(!imgElement) return;
     imgElement.classList.add('taking-damage');
@@ -1778,7 +1524,6 @@ function animateDamage(imgElement) {
         imgElement.classList.remove('taking-damage');
     }, 300);
 }
-
 function animateAttack(imgElement, isPlayer) {
     if(!imgElement) return;
     const attackClass = isPlayer ? 'attacking' : 'opponent-attacking';
@@ -1788,36 +1533,28 @@ function animateAttack(imgElement, isPlayer) {
     }, 200);
 }
 
-
-// --- EVENT LISTENERS ---
 function initEventListeners() {
     restartButton.addEventListener('click', initGame);
     endGameButton.addEventListener('click', endGame);
     playAiButton.addEventListener('click', showAiSelectionScreen);
     playFriendButton.addEventListener('click', showLobbyScreen);
     
-    // NEW: Use the correct variables we assigned in initDomElements
+    // NEW EVENT LISTENERS
     eventBattleBtn.addEventListener('click', showEventBattleScreen);
     eventBackBtn.addEventListener('click', hideEventBattleScreen);
-    eventSignInBtn.addEventListener('click', joinEvent);
-    eventSignOutBtn.addEventListener('click', leaveEvent);
-    eventJoinMatchBtn.addEventListener('click', joinAssignedMatch);
-    
+    eventConfirmSignInBtn.addEventListener('click', signUserIntoEvent);
+
     leaderboardBtn.addEventListener('click', showLeaderboard);
     leaderboardBackBtn.addEventListener('click', hideLeaderboard);
 
     helpButton.addEventListener('click', showHelpScreen);
     helpBackButton.addEventListener('click', hideHelpScreen);
-
     prevPokemonButton.addEventListener('click', showPrevPokemon);
     nextPokemonButton.addEventListener('click', showNextPokemon);
-
     languageToggleButton.addEventListener('click', toggleLanguage);
-
     createGameButton.addEventListener('click', createGame);
     joinGameButton.addEventListener('click', joinGame);
     lobbyBackButton.addEventListener('click', leaveLobby);
-    
     saveUsernameBtn.addEventListener('click', handleSaveUsername);
 
     showLogButton.addEventListener('click', () => {
@@ -1830,7 +1567,6 @@ function initEventListeners() {
         logReviewOverlay.classList.add('hidden');
     });
 }
-
 initDomElements();
 initEventListeners();
 initFirebase();
